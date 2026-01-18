@@ -33,7 +33,7 @@ private:
     // Mode timing (in seconds)
     static constexpr float SCATTER_TIME = 7.0f;
     static constexpr float CHASE_TIME = 20.0f;
-    static constexpr float FRIGHTENED_TIME = 6.0f;
+    static constexpr float FRIGHTENED_TIME = 10.0f; 
 
     // Targeting parameters
     static constexpr int AMBUSH_DISTANCE = 4;               // Tiles ahead for ambusher

@@ -38,4 +38,21 @@ namespace GameConfig
     */
 }
 
+class PointConfig
+{
+    public: 
+    static constexpr int POINTS_PER_PELLET = 10;
+    static constexpr int POINTS_PER_POWER_PELLET = 50;
+    static constexpr int First_Frightened_Ghost_Points = 200;
+    static constexpr int Second_Frightened_Ghost_Points = 400;
+    static constexpr int Third_Frightened_Ghost_Points = 800;
+    static constexpr int Fourth_Frightened_Ghost_Points = 1600;
+    static constexpr int CHERRY_POINTS = 300;
+    static constexpr int STRAWBERRY_POINTS = 500;
+    static constexpr int ORANGE_POINTS = 700;
+    static constexpr int APPLE_POINTS = 900;
+    static constexpr int GRAPEFRUIT_POINTS = 1200;
+    static constexpr int PANCAKE_POINTS = 1500;
+}
+
 #endif // GAMECONFIG_H
