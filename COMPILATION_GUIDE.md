@@ -128,6 +128,4 @@ munch maze/
 - Sprite animations
 - Smooth movement
 
-## Success
 
-Your Munch Maze game with intelligent Ghost AI is now ready to play! 🎮
