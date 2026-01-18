@@ -204,11 +204,9 @@ int main()
 
     // Add these before the game loop
     sf::Clock fruitTimer;
-    bool fruitPresent = false; // fruit initially not present
-    bool waitingForRespawn = false; // waiting state after fruit is eaten
+    bool fruitPresent = false;                     // fruit initially not present
+    bool waitingForRespawn = false;                // waiting state after fruit is eaten
     Pellet fruitPellet(13, 18, PelletType::APPLE); // fruit spawns at center bottom
-
-    
 
     // Game loop
     while (window.isOpen())
@@ -230,7 +228,7 @@ int main()
         }
 
         // Check if fruit is eaten
-        if (fruitPresent && muncher.getPosition() == sf::Vector2i(14, 19) && !fruitPellet.isCollected())
+        if (fruitPresent && muncher.getPosition() == fruitPellet.getPosition() && !fruitPellet.isCollected())
         {
             fruitPellet.collect();
             fruitPresent = false;

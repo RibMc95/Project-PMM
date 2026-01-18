@@ -36,20 +36,20 @@ public:
         }
     }
 
-    bool hasPellet(int x, int y) const
+    bool hasPellet(int x, int y) const // Check if there's a pellet at (x, y)
     {
         return isValidPosition(x, y) ? pellets[y][x] : false;
     }
-    bool hasPowerPellet(int x, int y) const
+    bool hasPowerPellet(int x, int y) const // Check if there's a power pellet at (x, y)
     {
         return isValidPosition(x, y) ? powerPellets[y][x] : false;
     }
-    void setPellet(int x, int y, bool has)
+    void setPellet(int x, int y, bool has) // Set or clear a pellet at (x, y)
     {
         if (isValidPosition(x, y))
             pellets[y][x] = has;
     }
-    void setPowerPellet(int x, int y, bool has)
+    void setPowerPellet(int x, int y, bool has) // Set or clear a power pellet at (x, y)
     {
         if (isValidPosition(x, y))
         {
@@ -58,11 +58,11 @@ public:
                 pellets[y][x] = false;
         }
     }
-    bool isValidPosition(int x, int y) const
+    bool isValidPosition(int x, int y) const // Check if (x, y) is within grid bounds
     {
         return (x >= 0 && x < width && y >= 0 && y < height);
     }
-    int countPellets() const
+    int countPellets() const // Count total pellets
     {
         int count = 0;
         for (int y = 0; y < height; ++y)
@@ -71,7 +71,7 @@ public:
                     ++count;
         return count;
     }
-    int countPowerPellets() const
+    int countPowerPellets() const // Count total power pellets
     {
         int count = 0;
         for (int y = 0; y < height; ++y)

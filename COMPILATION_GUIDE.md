@@ -6,7 +6,7 @@ To compile and run your Munch Maze game:
 
 ```bash
 # Navigate to the project directory
-cd "/mnt/c/Users/micah/OneDrive/Desktop/proto muncher"
+cd "/Your Folder/proto muncher"
 
 # Compile the project (Linux/macOS)
 make
