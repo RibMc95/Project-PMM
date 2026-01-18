@@ -166,7 +166,7 @@ inline void Ghost::updateAnimation()
                 sprite.setTexture(normalTextures[dirIndex][0]);
             }
         }
-
+        
         // Scale the sprite from 100x100 to appropriate size
         sprite.setScale(GameConfig::SPRITE_SCALE, GameConfig::SPRITE_SCALE);
         animationClock.restart();
