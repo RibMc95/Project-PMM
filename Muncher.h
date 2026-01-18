@@ -97,9 +97,10 @@ inline Muncher::Muncher(int startX, int startY, int gridSize)
       movementSpeed(0.3f), isMoving(false)
 {
     targetPosition = renderPosition;
-    sprite.setPosition(renderPosition); // Ensure sprite starts at correct position
     loadTextures();
     setState(MuncherState::IDLE);
+    // Set initial sprite position with origin offset
+    sprite.setPosition(renderPosition.x + gridSize / 2.0f, renderPosition.y + gridSize / 2.0f);
 }
 
 // Load all PNG textures
@@ -164,6 +165,24 @@ inline void Muncher::updateAnimation()
             currentFrame = (currentFrame + 1) % currentTextures->size();
             sprite.setTexture((*currentTextures)[currentFrame]);
             sprite.setScale(GameConfig::SPRITE_SCALE, GameConfig::SPRITE_SCALE);
+
+            // Set rotation based on direction
+            sprite.setOrigin(50.0f, 50.0f); // Set origin to center of 100x100 sprite
+            switch (direction)
+            {
+            case MuncherDirection::RIGHT:
+                sprite.setRotation(0.0f);
+                break;
+            case MuncherDirection::DOWN:
+                sprite.setRotation(90.0f);
+                break;
+            case MuncherDirection::LEFT:
+                sprite.setRotation(180.0f);
+                break;
+            case MuncherDirection::UP:
+                sprite.setRotation(270.0f);
+                break;
+            }
         }
 
         animationClock.restart();
@@ -194,7 +213,8 @@ inline void Muncher::updateMovement()
             renderPosition.y = startPos.y + (targetPosition.y - startPos.y) * progress;
         }
 
-        sprite.setPosition(renderPosition);
+        // Adjust position for rotated sprite (add half cell size to account for origin at center)
+        sprite.setPosition(renderPosition.x + size / 2.0f, renderPosition.y + size / 2.0f);
     }
 }
 
@@ -226,6 +246,24 @@ inline void Muncher::setState(MuncherState newState)
         {
             sprite.setTexture((*currentTextures)[0]);
             sprite.setScale(GameConfig::SPRITE_SCALE, GameConfig::SPRITE_SCALE);
+
+            // Set rotation based on direction
+            sprite.setOrigin(50.0f, 50.0f); // Set origin to center of 100x100 sprite
+            switch (direction)
+            {
+            case MuncherDirection::RIGHT:
+                sprite.setRotation(0.0f);
+                break;
+            case MuncherDirection::DOWN:
+                sprite.setRotation(90.0f);
+                break;
+            case MuncherDirection::LEFT:
+                sprite.setRotation(180.0f);
+                break;
+            case MuncherDirection::UP:
+                sprite.setRotation(270.0f);
+                break;
+            }
         }
     }
 }

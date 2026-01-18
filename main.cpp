@@ -252,7 +252,7 @@ int main()
             fruitTimer.restart();
         }
 
-        // After fruit is eaten, wait 5 seconds to respawn
+        // After fruit is eaten, wait 45 seconds to respawn
         if (waitingForRespawn && fruitTimer.getElapsedTime().asSeconds() >= 45.f)
         {
             waitingForRespawn = false;
