@@ -1,5 +1,7 @@
 #include <SFML/Graphics.hpp>
 #include <iostream>
+#include <cstdlib>
+#include <ctime>
 #include "Maze.h"
 #include "PelletGrid.h"
 #include "Pellet.h"
@@ -204,9 +206,20 @@ int main()
 
     // Add these before the game loop
     sf::Clock fruitTimer;
-    bool fruitPresent = false;                     // fruit initially not present
-    bool waitingForRespawn = false;                // waiting state after fruit is eaten
-    Pellet fruitPellet(13, 18, PelletType::APPLE); // fruit spawns at center bottom
+    bool fruitPresent = false;      // fruit initially not present
+    bool waitingForRespawn = false; // waiting state after fruit is eaten
+
+    // Fruit types to cycle through
+    std::vector<PelletType> fruitTypes =
+        {
+            PelletType::APPLE,
+            PelletType::CHERRY,
+            PelletType::STRAWBERRY,
+            PelletType::ORANGE,
+            PelletType::GRAPEFRUIT,
+            PelletType::PANCAKE};
+    int currentFruitIndex = 0;
+    Pellet fruitPellet(13, 18, fruitTypes[currentFruitIndex]); // fruit spawns at center bottom
 
     // Game loop
     while (window.isOpen())
@@ -221,9 +234,12 @@ int main()
         }
 
         // Fruit spawn logic
-        if (!fruitPresent && !waitingForRespawn && fruitTimer.getElapsedTime().asSeconds() >= 45.f) // Spawn fruit every 45 seconds
+        if (!fruitPresent && !waitingForRespawn && fruitTimer.getElapsedTime().asSeconds() >= 45.f) // Spawn fruit every 5 seconds
         {
             fruitPresent = true;
+            currentFruitIndex = (currentFruitIndex + 1) % fruitTypes.size();
+            std::cout << "Spawning fruit type index: " << currentFruitIndex << std::endl;
+            fruitPellet.setType(fruitTypes[currentFruitIndex]);
             fruitPellet.reset();
         }
 
@@ -236,11 +252,14 @@ int main()
             fruitTimer.restart();
         }
 
-        // After fruit is eaten, wait 45 seconds to respawn
+        // After fruit is eaten, wait 5 seconds to respawn
         if (waitingForRespawn && fruitTimer.getElapsedTime().asSeconds() >= 45.f)
         {
             waitingForRespawn = false;
             fruitPresent = true;
+            currentFruitIndex = (currentFruitIndex + 1) % fruitTypes.size();
+            std::cout << "Respawning fruit type index: " << currentFruitIndex << std::endl;
+            fruitPellet.setType(fruitTypes[currentFruitIndex]);
             fruitPellet.reset();
         }
 

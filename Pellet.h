@@ -115,6 +115,9 @@ inline void Pellet::setType(PelletType pelletType)
 
     // Scale the sprite from 100x100 to appropriate size
     sprite.setScale(GameConfig::SPRITE_SCALE, GameConfig::SPRITE_SCALE);
+
+    // Update sprite position to ensure it's correctly positioned with new texture
+    sprite.setPosition(position.x * GameConfig::CELL_SIZE, position.y * GameConfig::CELL_SIZE);
 }
 
 // Draw the pellet if not collected
