@@ -6,18 +6,38 @@ To compile and run your Munch Maze game:
 
 ```bash
 # Navigate to the project directory
-cd "/mnt/c/Users/micah/OneDrive/Desktop/DSA Fall 2025/munch maze"
+cd "/mnt/c/Users/micah/OneDrive/Desktop/proto muncher"
 
-# Compile the project
+# Compile the project (Linux/macOS)
 make
 
 # Run the game
 ./munch_maze
 ```
 
+## Building a Fully Portable Windows .exe
+
+To create a standalone Windows executable that runs on any Windows machine (no command line needed):
+
+1. Install [MinGW-w64](https://www.mingw-w64.org/) and static SFML libraries for Windows.
+2. Open a terminal in your project directory.
+3. Run:
+
+```bash
+make win_static
+```
+
+This will produce `munch_maze.exe` which is fully portable. You can double-click it to run on any Windows PC (no extra DLLs required).
+
+**Note:**
+
+- You must have static versions of SFML libraries (e.g., `sfml-graphics-s.lib`, etc.) in your MinGW environment.
+- If you see missing DLL errors, ensure you are linking static libraries and have all dependencies available.
+
 ## Makefile Commands
 
-- `make` or `make all` - Compile the game
+- `make` or `make all` - Compile the game (Linux/macOS)
+- `make win_static` - Build a fully portable Windows .exe
 - `make clean` - Remove compiled files
 - `make run` - Compile and run the game
 - `make debug` - Compile with debug symbols
