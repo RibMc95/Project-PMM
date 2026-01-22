@@ -29,27 +29,27 @@ The ghosts cycle through three main modes:
 
 ## Individual Ghost Personalities
 
-### 🔴 JACK (Red Ghost) - "The Chaser"
+###  JACK (Red Ghost) - "The Chaser"
 
 - **Strategy**: Direct pursuit
 - **Target**: Muncher's current position
 - **Behavior**: Always heads straight toward the Muncher
 
-### 🔵 MIKE (Blue Ghost) - "The Ambusher"  
+###  MIKE (Blue Ghost) - "The Ambusher"  
 
 - **Strategy**: Ambush from ahead
 - **Target**: 4 tiles ahead of Muncher's direction
 - **Behavior**: Tries to cut off the Muncher's path
 - **Note**: Includes the original Pac-Man "up direction bug" for authenticity
 
-### 🟣 SAM (Purple Ghost) - "The Fickle"
+###  SAM (Purple Ghost) - "The Fickle"
 
 - **Strategy**: Complex targeting using vector math
 - **Target**: Based on both Muncher's position AND Chaser's position
 - **Behavior**: Most unpredictable, uses offset calculations
 - **Calculation**: Takes a point 2 tiles ahead of Muncher, then doubles the vector from Chaser to that point
 
-### 🟡 WILL (Yellow Ghost) - "The Bashful"
+###  WILL (Yellow Ghost) - "The Bashful"
 
 - **Strategy**: Alternates between chase and retreat
 - **Target**: Muncher's position when far away, corner when close
