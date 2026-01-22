@@ -35,6 +35,7 @@ class Ghost
 private:
     sf::Vector2i position;
     sf::Vector2f renderPosition;
+    sf::Vector2i spawnPosition; // Original spawn point
     GhostType ghostType;
     GhostDirection direction;
     GhostState state;
@@ -43,6 +44,7 @@ private:
     // Animation components
     std::vector<sf::Texture> normalTextures[4]; // 4 directions
     std::vector<sf::Texture> frightenedTextures;
+    std::vector<sf::Texture> eatenTextures; // Directional textures for eaten/returning state
     sf::Sprite sprite;
 
     // Animation timing
@@ -56,15 +58,21 @@ private:
     float movementSpeed;
     bool isMoving;
 
+    // Eaten state
+    bool isEaten;
+    sf::Clock eatenTimer;
+    static constexpr float EATEN_DISPLAY_TIME = 0.5f; // Show eaten sprite for 0.5 seconds
+
 public:
-        // Set position directly (for teleportation)
-        void setPosition(int x, int y) {
-            position = sf::Vector2i(x, y);
-            renderPosition = sf::Vector2f(x * size, y * size);
-            targetPosition = renderPosition;
-            sprite.setPosition(renderPosition);
-            isMoving = false;
-        }
+    // Set position directly (for teleportation)
+    void setPosition(int x, int y)
+    {
+        position = sf::Vector2i(x, y);
+        renderPosition = sf::Vector2f(x * size, y * size);
+        targetPosition = renderPosition;
+        sprite.setPosition(renderPosition);
+        isMoving = false;
+    }
     // Constructor
     Ghost(int startX, int startY, GhostType type, int gridSize);
 
@@ -85,14 +93,23 @@ public:
     GhostState getState() const { return state; }
     sf::Sprite &getSprite() { return sprite; }
     bool getIsMoving() const { return isMoving; }
+    bool getIsEaten() const { return isEaten; }
+    void setEaten()
+    {
+        std::cout << "DEBUG: Ghost::setEaten() called. Setting isEaten=true, state=RETURNING" << std::endl;
+        isEaten = true;
+        eatenTimer.restart();
+        setState(GhostState::RETURNING);
+    }
 };
 
 // Constructor implementation
 inline Ghost::Ghost(int startX, int startY, GhostType type, int gridSize)
     : position(startX, startY), renderPosition(startX * gridSize, startY * gridSize),
+      spawnPosition(startX, startY),
       ghostType(type), direction(GhostDirection::RIGHT), state(GhostState::NORMAL),
       size(gridSize), animationSpeed(0.3f), currentFrame(0),
-      movementSpeed(0.4f), isMoving(false)
+      movementSpeed(0.4f), isMoving(false), isEaten(false)
 {
     targetPosition = renderPosition;
     loadTextures();
@@ -144,6 +161,21 @@ inline bool Ghost::loadTextures()
     frightenedTextures.push_back(frightenedTexture1);
     frightenedTextures.push_back(frightenedTexture2);
 
+    // Load eaten texture
+    sf::Texture eatenUpTexture, eatenDownTexture, eatenLeftTexture, eatenRightTexture;
+    if (!eatenUpTexture.loadFromFile("Spookies/Spookie_Eaten_Up.png") ||
+        !eatenDownTexture.loadFromFile("Spookies/Spookie_Eaten_Down.png") ||
+        !eatenLeftTexture.loadFromFile("Spookies/Spookie_Eaten_Left.png") ||
+        !eatenRightTexture.loadFromFile("Spookies/Spookie_Eaten_Right.png"))
+    {
+        return false;
+    }
+
+    eatenTextures.push_back(eatenUpTexture);
+    eatenTextures.push_back(eatenDownTexture);
+    eatenTextures.push_back(eatenLeftTexture);
+    eatenTextures.push_back(eatenRightTexture);
+
     return true;
 }
 
@@ -157,6 +189,14 @@ inline void Ghost::updateAnimation()
             currentFrame = (currentFrame + 1) % frightenedTextures.size();
             sprite.setTexture(frightenedTextures[currentFrame]);
         }
+        else if (state == GhostState::RETURNING)
+        {
+            int dirIndex = static_cast<int>(direction);
+            if (dirIndex >= 0 && dirIndex < static_cast<int>(eatenTextures.size()))
+            {
+                sprite.setTexture(eatenTextures[dirIndex]);
+            }
+        }
         else
         {
             // Use normal directional texture
@@ -166,7 +206,7 @@ inline void Ghost::updateAnimation()
                 sprite.setTexture(normalTextures[dirIndex][0]);
             }
         }
-        
+
         // Scale the sprite from 100x100 to appropriate size
         sprite.setScale(GameConfig::SPRITE_SCALE, GameConfig::SPRITE_SCALE);
         animationClock.restart();
@@ -187,6 +227,14 @@ inline void Ghost::updateMovement()
             renderPosition = targetPosition;
             position = sf::Vector2i(targetPosition.x / size, targetPosition.y / size);
             isMoving = false;
+
+            // If eaten and reached spawn, reset to normal
+            if (isEaten && position == spawnPosition)
+            {
+                std::cout << "Ghost reached spawn at (" << position.x << "," << position.y << "). Resetting to NORMAL." << std::endl;
+                isEaten = false;
+                setState(GhostState::NORMAL);
+            }
         }
         else
         {
@@ -197,6 +245,41 @@ inline void Ghost::updateMovement()
         }
 
         sprite.setPosition(renderPosition);
+    }
+    else if (isEaten)
+    {
+        // If eaten and not moving, start moving toward spawn
+        if (position != spawnPosition)
+        {
+            std::cout << "Ghost moving from (" << position.x << "," << position.y << ") to spawn (" << spawnPosition.x << "," << spawnPosition.y << ")" << std::endl;
+            // Simple pathfinding: move closer to spawn
+            int nextX = position.x;
+            int nextY = position.y;
+
+            if (position.x < spawnPosition.x)
+                nextX++;
+            else if (position.x > spawnPosition.x)
+                nextX--;
+            else if (position.y < spawnPosition.y)
+                nextY++;
+            else if (position.y > spawnPosition.y)
+                nextY--;
+
+            sf::Vector2i nextPos(nextX, nextY);
+            targetPosition = sf::Vector2f(nextPos.x * size, nextPos.y * size);
+            isMoving = true;
+            movementClock.restart();
+
+            // Update direction based on movement
+            if (nextX > position.x)
+                setDirection(GhostDirection::RIGHT);
+            else if (nextX < position.x)
+                setDirection(GhostDirection::LEFT);
+            else if (nextY > position.y)
+                setDirection(GhostDirection::DOWN);
+            else if (nextY < position.y)
+                setDirection(GhostDirection::UP);
+        }
     }
 }
 
@@ -213,6 +296,20 @@ inline void Ghost::setState(GhostState newState)
         if (state == GhostState::FRIGHTENED && !frightenedTextures.empty())
         {
             sprite.setTexture(frightenedTextures[0]);
+        }
+        else if (state == GhostState::RETURNING)
+        {
+            std::cout << "DEBUG: Ghost setState RETURNING. eatenTextures.size()=" << eatenTextures.size() << ", direction=" << static_cast<int>(direction) << std::endl;
+            int dirIndex = static_cast<int>(direction);
+            if (dirIndex >= 0 && dirIndex < static_cast<int>(eatenTextures.size()))
+            {
+                std::cout << "DEBUG: Setting eaten texture at index " << dirIndex << std::endl;
+                sprite.setTexture(eatenTextures[dirIndex]);
+            }
+            else
+            {
+                std::cout << "DEBUG: WARNING - dirIndex " << dirIndex << " out of range for eatenTextures!" << std::endl;
+            }
         }
         else
         {
@@ -232,15 +329,26 @@ inline void Ghost::setDirection(GhostDirection newDirection)
 {
     direction = newDirection;
     // Update texture when direction changes
-    if (state != GhostState::FRIGHTENED)
+    int dirIndex = static_cast<int>(direction);
+
+    if (state == GhostState::FRIGHTENED)
     {
-        int dirIndex = static_cast<int>(direction);
-        if (!normalTextures[dirIndex].empty())
+        return;
+    }
+
+    if (state == GhostState::RETURNING)
+    {
+        if (dirIndex >= 0 && dirIndex < static_cast<int>(eatenTextures.size()))
         {
-            sprite.setTexture(normalTextures[dirIndex][0]);
-            sprite.setScale(GameConfig::SPRITE_SCALE, GameConfig::SPRITE_SCALE);
+            sprite.setTexture(eatenTextures[dirIndex]);
         }
     }
+    else if (!normalTextures[dirIndex].empty())
+    {
+        sprite.setTexture(normalTextures[dirIndex][0]);
+    }
+
+    sprite.setScale(GameConfig::SPRITE_SCALE, GameConfig::SPRITE_SCALE);
 }
 
 // Check if ghost can move in a direction

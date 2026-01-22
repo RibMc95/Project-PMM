@@ -308,6 +308,18 @@ int main()
         int gridX = muncherPos.x;
         int gridY = muncherPos.y;
 
+        // Check for ghost collisions (eating frightened ghosts) using bounding boxes
+        sf::FloatRect muncherBounds = muncher.getSprite().getGlobalBounds();
+        for (auto &ghost : ghosts)
+        {
+            sf::FloatRect ghostBounds = ghost.getSprite().getGlobalBounds();
+            if (muncherBounds.intersects(ghostBounds) && ghost.getState() == GhostState::FRIGHTENED && !ghost.getIsEaten())
+            {
+                std::cout << "Ghost eaten! Showing eaten sprite." << std::endl;
+                ghost.setEaten();
+            }
+        }
+
         if (pelletGrid.hasPowerPellet(gridX, gridY))
         {
             std::cout << "Power pellet eaten! Ghosts are now frightened!" << std::endl;

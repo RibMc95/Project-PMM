@@ -38,9 +38,39 @@ namespace GameConfig
     */
 }
 
-class PointConfig
+class lifesystem // Manages player lives
 {
-    public: 
+protected:
+    int extraLives = 3;
+
+public:
+    lifesystem() : extraLives(3) {} // Constructor
+    ~lifesystem() {}                // Destructor
+
+    void loseLife()
+    {
+        if (extraLives > 0)
+        {
+            extraLives--;
+        }
+    }
+
+    int getLives() const
+    {
+        return extraLives;
+    }
+};
+
+class PointSystem : public lifesystem // Manages point values for various game actions (uses lifesystem to track extra lives)
+{
+private:
+    int totalPoints = 0;
+    int nextExtraLifeThreshold = 10000;
+
+public:
+    PointSystem() : totalPoints(0), nextExtraLifeThreshold(10000) {} // Constructor
+    ~PointSystem() {}                                                // Destructor
+
     static constexpr int POINTS_PER_PELLET = 10;
     static constexpr int POINTS_PER_POWER_PELLET = 50;
     static constexpr int First_Frightened_Ghost_Points = 200;
@@ -53,6 +83,23 @@ class PointConfig
     static constexpr int APPLE_POINTS = 900;
     static constexpr int GRAPEFRUIT_POINTS = 1200;
     static constexpr int PANCAKE_POINTS = 1500;
-}
+
+    // Add points and check for extra life
+    void addPoints(int points)
+    {
+        totalPoints += points;
+        // Once every 10000 points, extra life is awarded
+        if (totalPoints >= nextExtraLifeThreshold)
+        {
+            extraLives++;
+            nextExtraLifeThreshold += 10000;
+        }
+    }
+
+    int getTotalPoints() const
+    {
+        return totalPoints;
+    }
+};
 
 #endif // GAMECONFIG_H

@@ -33,7 +33,7 @@ private:
     // Mode timing (in seconds)
     static constexpr float SCATTER_TIME = 7.0f;
     static constexpr float CHASE_TIME = 20.0f;
-    static constexpr float FRIGHTENED_TIME = 10.0f; 
+    static constexpr float FRIGHTENED_TIME = 10.0f;
 
     // Targeting parameters
     static constexpr int AMBUSH_DISTANCE = 4;               // Tiles ahead for ambusher
@@ -105,12 +105,16 @@ inline void GhostAI::update(std::vector<Ghost> &ghosts, const Muncher &muncher, 
     // Update AI mode timing
     updateMode();
 
-    // If we just exited frightened mode, return all ghosts to normal state
+    // If we just exited frightened mode, return non-returning ghosts to normal state
     if (previousMode == AIMode::FRIGHTENED && currentMode != AIMode::FRIGHTENED)
     {
         for (auto &ghost : ghosts)
         {
-            ghost.setState(GhostState::NORMAL);
+            // Keep ghosts in RETURNING state, only reset others to NORMAL
+            if (ghost.getState() != GhostState::RETURNING)
+            {
+                ghost.setState(GhostState::NORMAL);
+            }
         }
     }
 
