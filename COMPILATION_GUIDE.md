@@ -2,130 +2,56 @@
 
 ## Quick Start
 
-To compile and run your Munch Maze game:
-
 ```bash
-# Navigate to the project directory
-cd "/Your Folder/proto muncher"
-
-# Compile the project (Linux/macOS)
-make
-
-# Run the game
-./munch_maze
+cd "/path/to/proto muncher"
+make             # builds munch_maze
+./munch_maze     # run from the repo root so assets are found (on Windows use ./munch_maze or .\\munch_maze)
 ```
 
-## Building a Fully Portable Windows .exe
+## Prerequisites
 
-To create a standalone Windows executable that runs on any Windows machine (no command line needed):
+- C++17 compiler, `make`, and SFML 2.6+ development libraries
+  - Ubuntu/Debian: `sudo apt-get install libsfml-dev`
+  - Fedora: `sudo dnf install SFML-devel`
+  - Arch: `sudo pacman -S sfml`
+- Keep the asset folders next to the executable: `muncher/`, `Spookies/`, `Objects/`, and the maze PNGs (`practice grid 3.png`, optional `Maze.png`).
 
-1. Install [MinGW-w64](https://www.mingw-w64.org/) and static SFML libraries for Windows.
-2. Open a terminal in your project directory.
-3. Run:
+## Makefile Targets
 
-```bash
-make win_static
-```
+- `make` / `make all` – build `munch_maze`
+- `make run` – build then run from the repo root
+- `make debug` – build with debug symbols
+- `make clean` – remove built binaries
 
-This will produce `munch_maze.exe` which is fully portable. You can double-click it to run on any Windows PC (no extra DLLs required).
-
-**Note:**
-
-- You must have static versions of SFML libraries (e.g., `sfml-graphics-s.lib`, etc.) in your MinGW environment.
-- If you see missing DLL errors, ensure you are linking static libraries and have all dependencies available.
-
-## Makefile Commands
-
-- `make` or `make all` - Compile the game (Linux/macOS)
-- `make win_static` - Build a fully portable Windows .exe
-- `make clean` - Remove compiled files
-- `make run` - Compile and run the game
-- `make debug` - Compile with debug symbols
-
-## Manual Compilation (if needed)
-
-If you prefer to compile manually without the Makefile:
+## Manual Compilation
 
 ```bash
 g++ -std=c++17 -Wall -Wextra main.cpp -lsfml-graphics -lsfml-window -lsfml-system -o munch_maze
 ```
 
-## Required Libraries
+## Runtime Assets & Maze Input
 
-Make sure you have SFML installed on your system:
+- Run from the project root so relative asset paths resolve.
+- Sprites/textures live in `muncher/`, `Spookies/`, and `Objects/`.
+- Default maze loads from `practice grid 3.png`; if missing, the code falls back to `Maze.png`, then to the built-in layout.
+- Custom maze color key (RGB with small tolerance):
+  - Walls: Blue (0,14,214) or black
+  - Pellet: Orange (~255,126,0)
+  - Power pellet: Red (~237,28,36)
+  - Player start: Cyan (~0,183,239)
+  - Ghost spawn: Green (~168,230,29)
+  - Scoreboard zone: Grey (~70,70,70)
 
-- **Ubuntu/Debian**: `sudo apt-get install libsfml-dev`
-- **Fedora**: `sudo dnf install SFML-devel`
-- **Arch Linux**: `sudo pacman -S sfml`
+## Features Snapshot
+
+- Authentic Pac-Man sizing: 28x31 grid, 32 px cells, 896x992 window
+- Ghost AI with scatter/chase/frightened modes and four personalities
+- Fruit cycle spawns every 45s (apple → cherry → strawberry → orange → grapefruit → pancake)
+- Pellet and power-pellet collection with frightened ghost handling
+- Sprite-based animation for player and ghosts; PNG-driven maze input for fast iteration
 
 ## Troubleshooting
 
-### Linker Errors
-
-If you get "undefined reference" errors, it usually means:
-
-1. SFML is not installed
-2. SFML libraries are not being linked properly
-3. Wrong library path
-
-### Solution
-
-The Makefile includes the proper SFML linking flags:
-
-- `-lsfml-graphics` (for graphics/rendering)
-- `-lsfml-window` (for window management)  
-- `-lsfml-system` (for system utilities)
-
-### Runtime Errors
-
-If the program compiles but crashes at runtime:
-
-1. Make sure you have the required sprite/texture files
-2. Check that file paths in the code match your actual file structure
-3. Ensure you have proper graphics drivers
-
-## Project Structure
-
-```
-munch maze/
-├── main.cpp              # Main game loop
-├── Spookie_Chase.h       # Ghost AI system
-├── Spookies.h           # Ghost class definitions
-├── Muncher.h            # Player character
-├── Pellet.h             # Pellet/food items
-├── Grid.h               # Game grid/maze
-├── GameConfig.h         # Configuration constants
-├── Makefile             # Build configuration
-└── AI_README.md         # AI system documentation
-```
-
-## Features Implemented
-
-✅ **Authentic Pac-Man Dimensions**
-
-- 28x31 grid (authentic Pac-Man maze size)
-- 24x24 pixel cells (3x scale from original 8x8)
-- 672x744 pixel window (perfect for modern displays)
-- Classic Pac-Man proportions and layout
-
-✅ **Complete Ghost AI System**
-
-- Scatter/Chase/Frightened modes
-- Individual ghost personalities
-- Smart pathfinding
-- Power pellet interactions
-
-✅ **Game Mechanics**
-
-- Player movement
-- Pellet collection
-- Power pellet special effects
-- Collision detection
-
-✅ **Graphics**
-
-- SFML-based rendering
-- Sprite animations
-- Smooth movement
-
-
+- **Undefined references**: SFML dev libs not installed or wrong linkage order; use the Makefile targets to get the right flags.
+- **Black screen / no maze**: ensure `practice grid 3.png` (or `Maze.png`) is in the same folder as the executable and uses the color key above.
+- **Sprites not showing**: keep the `muncher/`, `Spookies/`, and `Objects/` folders beside the binary.
