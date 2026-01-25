@@ -27,6 +27,7 @@ enum class GhostState
 {
     NORMAL,
     FRIGHTENED,
+    EATEN,
     RETURNING
 };
 
@@ -61,7 +62,7 @@ private:
     // Eaten state
     bool isEaten;
     sf::Clock eatenTimer;
-    static constexpr float EATEN_DISPLAY_TIME = 0.5f; // Show eaten sprite for 0.5 seconds
+    static constexpr float EATEN_DISPLAY_TIME = 8.0f; // Show eaten sprite for 8 seconds
 
 public:
     // Set position directly (for teleportation)
