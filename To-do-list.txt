@@ -1,6 +1,5 @@
 Things to do:
 1. Make sure the eaten sprites shows when muncher eats the ghost
-2. smoother animation (stop making them look their moving one grid at a time)
-3. print out the score, high score, and lives 
+2. print out the score, high score, and lives 
 4 when muncher touches any ghost when not under the effect of the power pellet, plays his dying animation, loses 1 life, and put every one to their starting spots.
 5. After complety developed, add the diffcuilty curve. 
