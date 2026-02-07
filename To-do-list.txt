@@ -1,4 +1,4 @@
 Things to do: 
-1. print out the score, high score, and lives 
+1. make sure ghost actrully goe through the door
 2 when muncher touches any ghost when not under the effect of the power pellet, plays his dying animation, loses one life, and put every one to their starting spots.
 3. After complety developed, add the diffcuilty curve. 

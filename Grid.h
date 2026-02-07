@@ -61,7 +61,8 @@ enum CellType
     POWER_PELLET = 4,  // 0100
     GHOST_SPAWN = 8,   // 1000
     PLAYER_START = 16, // 10000
-    GHOST_DOOR = 32    // 100000
+    GHOST_DOOR = 32,   // 100000
+    SCOREBOARD = 64    // 1000000
 };
 
 // Operator overloads for bit flag operations
@@ -129,6 +130,7 @@ public:
     bool isPlayerStart(int x, int y) const;
     bool isGhostSpawn(int x, int y) const;
     bool isGhostDoor(int x, int y) const;
+    bool isScoreboard(int x, int y) const;
     void setPlayerStart(int x, int y);
     void setGhostSpawn(int x, int y);
 
@@ -260,6 +262,8 @@ inline CellType Grid::getCellType(int x, int y) const
         return GHOST_SPAWN;
     if (flags & PLAYER_START)
         return PLAYER_START;
+    if (flags & SCOREBOARD)
+        return SCOREBOARD;
 
     return EMPTY;
 }
@@ -350,6 +354,11 @@ inline bool Grid::isGhostSpawn(int x, int y) const
 inline bool Grid::isGhostDoor(int x, int y) const
 {
     return hasFlag(x, y, GHOST_DOOR);
+}
+
+inline bool Grid::isScoreboard(int x, int y) const
+{
+    return hasFlag(x, y, SCOREBOARD);
 }
 
 inline void Grid::setPlayerStart(int x, int y)
@@ -467,7 +476,7 @@ inline bool Grid::loadMazeFromImage(const std::string &filename)
                 addFlag(x, y, WALL); // Door blocks player but ghosts can pass
                 break;
             case ImageTileType::SCOREBOARD:
-                // Nothing, reserved for scoreboard
+                addFlag(x, y, SCOREBOARD);
                 break;
             case ImageTileType::WALL:
             case ImageTileType::EMPTY:

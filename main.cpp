@@ -70,7 +70,7 @@ void drawGame(sf::RenderWindow &window, const Grid &grid, const PelletGrid &pell
                 playerStartTile.setPosition(pixelX, pixelY);
                 window.draw(playerStartTile);
             }
-            else if (grid.getCellType(x, y) == 0 && abs(grid.getFlags(x, y) - 128) < 30)
+            else if (grid.isScoreboard(x, y))
             {
                 // Draw grey tile for scoreboard (if you want to visualize it)
                 sf::RectangleShape scoreboardTile(sf::Vector2f(GameConfig::CELL_SIZE, GameConfig::CELL_SIZE));
@@ -179,6 +179,61 @@ int main()
     // Initialize Ghost AI Controller
     GhostAI ghostAI;
 
+    // Points and lives
+    PointSystem points;
+    int highScore = 0;
+
+    // Load UI font
+    sf::Font uiFont;
+    bool fontLoaded = uiFont.loadFromFile("Roboto-Black.ttf");
+    if (!fontLoaded)
+    {
+        std::cout << "Failed to load font Roboto-Black.ttf" << std::endl;
+    }
+
+    // Find scoreboard bounds from grid tiles
+    bool hasScoreboard = false;
+    int sbMinX = grid.getWidth();
+    int sbMinY = grid.getHeight();
+    int sbMaxX = -1;
+    int sbMaxY = -1;
+    for (int y = 0; y < grid.getHeight(); y++)
+    {
+        for (int x = 0; x < grid.getWidth(); x++)
+        {
+            if (grid.isScoreboard(x, y))
+            {
+                hasScoreboard = true;
+                if (x < sbMinX)
+                    sbMinX = x;
+                if (y < sbMinY)
+                    sbMinY = y;
+                if (x > sbMaxX)
+                    sbMaxX = x;
+                if (y > sbMaxY)
+                    sbMaxY = y;
+            }
+        }
+    }
+
+    sf::Text scoreText;
+    sf::Text highScoreText;
+    sf::Text livesText;
+    if (fontLoaded)
+    {
+        scoreText.setFont(uiFont);
+        highScoreText.setFont(uiFont);
+        livesText.setFont(uiFont);
+
+        scoreText.setFillColor(sf::Color::White);
+        highScoreText.setFillColor(sf::Color::White);
+        livesText.setFillColor(sf::Color::White);
+
+        scoreText.setCharacterSize(18);
+        highScoreText.setCharacterSize(18);
+        livesText.setCharacterSize(18);
+    }
+
     std::cout << "Game initialized with:" << std::endl;
     std::cout << "- Window size: " << GameConfig::WINDOW_WIDTH << "x" << GameConfig::WINDOW_HEIGHT << std::endl;
     std::cout << "- Grid size: " << GameConfig::GRID_WIDTH << "x" << GameConfig::GRID_HEIGHT << std::endl;
@@ -250,6 +305,30 @@ int main()
             fruitPresent = false;
             waitingForRespawn = true;
             fruitTimer.restart();
+
+            switch (fruitPellet.getType())
+            {
+            case PelletType::CHERRY:
+                points.addPoints(PointSystem::CHERRY_POINTS);
+                break;
+            case PelletType::STRAWBERRY:
+                points.addPoints(PointSystem::STRAWBERRY_POINTS);
+                break;
+            case PelletType::ORANGE:
+                points.addPoints(PointSystem::ORANGE_POINTS);
+                break;
+            case PelletType::APPLE:
+                points.addPoints(PointSystem::APPLE_POINTS);
+                break;
+            case PelletType::GRAPEFRUIT:
+                points.addPoints(PointSystem::GRAPEFRUIT_POINTS);
+                break;
+            case PelletType::PANCAKE:
+                points.addPoints(PointSystem::PANCAKE_POINTS);
+                break;
+            default:
+                break;
+            }
         }
 
         // After fruit is eaten, wait 45 seconds to respawn
@@ -317,6 +396,7 @@ int main()
             {
                 std::cout << "Ghost eaten! Showing eaten sprite." << std::endl;
                 ghost.setEaten();
+                points.addPoints(PointSystem::First_Frightened_Ghost_Points);
             }
         }
 
@@ -325,6 +405,7 @@ int main()
             std::cout << "Power pellet eaten! Ghosts are now frightened!" << std::endl;
             pelletGrid.setPowerPellet(gridX, gridY, false);
             ghostAI.setFrightened();
+            points.addPoints(PointSystem::POINTS_PER_POWER_PELLET);
 
             // Set all ghosts to frightened state
             for (auto &ghost : ghosts)
@@ -336,6 +417,7 @@ int main()
         {
             std::cout << "Pellet eaten!" << std::endl;
             pelletGrid.setPellet(gridX, gridY, false);
+            points.addPoints(PointSystem::POINTS_PER_PELLET);
         }
 
         // Clear window
@@ -357,6 +439,32 @@ int main()
         if (fruitPresent && !fruitPellet.isCollected())
         {
             fruitPellet.draw(window);
+        }
+
+        // Draw scoreboard text on top of scoreboard tiles
+        if (fontLoaded && hasScoreboard)
+        {
+            if (points.getTotalPoints() > highScore)
+            {
+                highScore = points.getTotalPoints();
+            }
+
+            scoreText.setString("SCORE " + std::to_string(points.getTotalPoints()));
+            highScoreText.setString("HIGH " + std::to_string(highScore));
+            livesText.setString("LIVES " + std::to_string(points.getLives()));
+
+            float sbLeft = sbMinX * GameConfig::CELL_SIZE;
+            float sbTop = sbMinY * GameConfig::CELL_SIZE;
+            float paddingX = 6.0f;
+            float paddingY = 4.0f;
+
+            scoreText.setPosition(sbLeft + paddingX, sbTop + paddingY);
+            highScoreText.setPosition(sbLeft + paddingX, sbTop + paddingY + 22.0f);
+            livesText.setPosition(sbLeft + paddingX, sbTop + paddingY + 44.0f);
+
+            window.draw(scoreText);
+            window.draw(highScoreText);
+            window.draw(livesText);
         }
 
         // Display current AI mode (for debugging)
