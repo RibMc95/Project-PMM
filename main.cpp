@@ -279,7 +279,7 @@ int main()
         for (auto &ghost : ghosts)
         {
             ghost.updateAnimation();
-            ghost.updateMovement();
+            ghost.updateMovement(grid, ghosts);
         }
 
         // Handle input (basic movement)

@@ -11,12 +11,13 @@
 // Enum for image tile types
 enum class ImageTileType
 {
-    WALL,        // Blue or Black
-    PELLET,      // 
-    POWER_PELLET,  // Red
-    EMPTY,        // 
+    WALL,         // Blue or Black
+    PELLET,       //
+    POWER_PELLET, // Red
+    EMPTY,        //
     PLAYER_START, // Cyan
     GHOST_SPAWN,  // Green
+    GHOST_DOOR,   // Magenta (ghost-only gate)
     SCOREBOARD    // Grey
 };
 
@@ -38,6 +39,9 @@ static inline ImageTileType getTileTypeFromColor(const sf::Color &color)
     // Green: Ghost spawn (168,230,29) ±10
     if (abs(color.r - 168) < 10 && abs(color.g - 230) < 10 && abs(color.b - 29) < 10)
         return ImageTileType::GHOST_SPAWN;
+    // Magenta: Ghost door (255,0,255) ±10
+    if (abs(color.r - 255) < 10 && abs(color.g - 0) < 10 && abs(color.b - 255) < 10)
+        return ImageTileType::GHOST_DOOR;
     // Blue: Wall (0,14,214) ±5 tolerance for PNG/SFML shifts
     if (abs(color.r - 0) <= 5 && abs(color.g - 14) <= 5 && abs(color.b - 214) <= 5)
         return ImageTileType::WALL;
@@ -51,12 +55,13 @@ static inline ImageTileType getTileTypeFromColor(const sf::Color &color)
 // Enhanced CellType enum using bit flags
 enum CellType
 {
-    EMPTY = 0,        // 0000
-    WALL = 1,         // 0001
-    PELLET = 2,       // 0010
-    POWER_PELLET = 4, // 0100
-    GHOST_SPAWN = 8,  // 1000
-    PLAYER_START = 16 // 10000
+    EMPTY = 0,         // 0000
+    WALL = 1,          // 0001
+    PELLET = 2,        // 0010
+    POWER_PELLET = 4,  // 0100
+    GHOST_SPAWN = 8,   // 1000
+    PLAYER_START = 16, // 10000
+    GHOST_DOOR = 32    // 100000
 };
 
 // Operator overloads for bit flag operations
@@ -123,6 +128,7 @@ public:
     // Spawn point methods
     bool isPlayerStart(int x, int y) const;
     bool isGhostSpawn(int x, int y) const;
+    bool isGhostDoor(int x, int y) const;
     void setPlayerStart(int x, int y);
     void setGhostSpawn(int x, int y);
 
@@ -341,6 +347,11 @@ inline bool Grid::isGhostSpawn(int x, int y) const
     return hasFlag(x, y, GHOST_SPAWN);
 }
 
+inline bool Grid::isGhostDoor(int x, int y) const
+{
+    return hasFlag(x, y, GHOST_DOOR);
+}
+
 inline void Grid::setPlayerStart(int x, int y)
 {
     // Remove previous player start if it exists
@@ -450,6 +461,10 @@ inline bool Grid::loadMazeFromImage(const std::string &filename)
                 break;
             case ImageTileType::GHOST_SPAWN:
                 addFlag(x, y, GHOST_SPAWN);
+                break;
+            case ImageTileType::GHOST_DOOR:
+                addFlag(x, y, GHOST_DOOR);
+                addFlag(x, y, WALL); // Door blocks player but ghosts can pass
                 break;
             case ImageTileType::SCOREBOARD:
                 // Nothing, reserved for scoreboard

@@ -131,6 +131,10 @@ inline void GhostAI::update(std::vector<Ghost> &ghosts, const Muncher &muncher, 
     // Update each ghost's AI
     for (auto &ghost : ghosts)
     {
+        // Returning ghosts should head back to spawn without AI steering.
+        if (ghost.getState() == GhostState::RETURNING || ghost.getIsEaten())
+            continue;
+
         // Skip if ghost is currently moving
         if (ghost.getIsMoving())
             continue;

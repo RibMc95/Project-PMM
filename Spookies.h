@@ -4,6 +4,8 @@
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include <string>
+#include <limits>
+#include <cstdlib>
 #include "Grid.h"
 #include "GameConfig.h"
 
@@ -80,7 +82,7 @@ public:
     // Methods
     bool loadTextures();
     void updateAnimation();
-    void updateMovement();
+    void updateMovement(const Grid &grid, const std::vector<Ghost> &ghosts);
     void setState(GhostState newState);
     void setDirection(GhostDirection newDirection);
     bool canMove(const Grid &grid, GhostDirection dir) const;
@@ -164,10 +166,10 @@ inline bool Ghost::loadTextures()
 
     // Load eaten texture
     sf::Texture eatenUpTexture, eatenDownTexture, eatenLeftTexture, eatenRightTexture;
-    if (!eatenUpTexture.loadFromFile("Spookies/Spookie_Eaten_Up.png") ||
-        !eatenDownTexture.loadFromFile("Spookies/Spookie_Eaten_Down.png") ||
-        !eatenLeftTexture.loadFromFile("Spookies/Spookie_Eaten_Left.png") ||
-        !eatenRightTexture.loadFromFile("Spookies/Spookie_Eaten_Right.png"))
+    if (!eatenUpTexture.loadFromFile("Spookies/eaten_up.png") ||
+        !eatenDownTexture.loadFromFile("Spookies/eaten_down.png") ||
+        !eatenLeftTexture.loadFromFile("Spookies/eaten_left.png") ||
+        !eatenRightTexture.loadFromFile("Spookies/eaten_right.png"))
     {
         return false;
     }
@@ -215,7 +217,7 @@ inline void Ghost::updateAnimation()
 }
 
 // Update smooth movement between grid positions
-inline void Ghost::updateMovement()
+inline void Ghost::updateMovement(const Grid &grid, const std::vector<Ghost> &ghosts)
 {
     if (isMoving)
     {
@@ -253,33 +255,98 @@ inline void Ghost::updateMovement()
         if (position != spawnPosition)
         {
             std::cout << "Ghost moving from (" << position.x << "," << position.y << ") to spawn (" << spawnPosition.x << "," << spawnPosition.y << ")" << std::endl;
-            // Simple pathfinding: move closer to spawn
-            int nextX = position.x;
-            int nextY = position.y;
+            GhostDirection bestDir = direction;
+            int bestDistance = std::numeric_limits<int>::max();
+            bool foundMove = false;
 
-            if (position.x < spawnPosition.x)
-                nextX++;
-            else if (position.x > spawnPosition.x)
-                nextX--;
-            else if (position.y < spawnPosition.y)
-                nextY++;
-            else if (position.y > spawnPosition.y)
-                nextY--;
+            GhostDirection directions[] = {
+                GhostDirection::UP,
+                GhostDirection::DOWN,
+                GhostDirection::LEFT,
+                GhostDirection::RIGHT};
 
-            sf::Vector2i nextPos(nextX, nextY);
-            targetPosition = sf::Vector2f(nextPos.x * size, nextPos.y * size);
-            isMoving = true;
-            movementClock.restart();
+            auto oppositeOf = [](GhostDirection dir)
+            {
+                switch (dir)
+                {
+                case GhostDirection::UP:
+                    return GhostDirection::DOWN;
+                case GhostDirection::DOWN:
+                    return GhostDirection::UP;
+                case GhostDirection::LEFT:
+                    return GhostDirection::RIGHT;
+                case GhostDirection::RIGHT:
+                    return GhostDirection::LEFT;
+                }
+                return GhostDirection::UP;
+            };
 
-            // Update direction based on movement
-            if (nextX > position.x)
-                setDirection(GhostDirection::RIGHT);
-            else if (nextX < position.x)
-                setDirection(GhostDirection::LEFT);
-            else if (nextY > position.y)
-                setDirection(GhostDirection::DOWN);
-            else if (nextY < position.y)
-                setDirection(GhostDirection::UP);
+            GhostDirection opposite = oppositeOf(direction);
+
+            auto tryPickMove = [&](bool allowReverse)
+            {
+                for (GhostDirection dir : directions)
+                {
+                    if (!allowReverse && dir == opposite)
+                        continue;
+                    if (!canMove(grid, dir))
+                        continue;
+
+                    sf::Vector2i nextPos = position;
+                    switch (dir)
+                    {
+                    case GhostDirection::UP:
+                        nextPos.y--;
+                        break;
+                    case GhostDirection::DOWN:
+                        nextPos.y++;
+                        break;
+                    case GhostDirection::LEFT:
+                        nextPos.x--;
+                        break;
+                    case GhostDirection::RIGHT:
+                        nextPos.x++;
+                        break;
+                    }
+                    if (nextPos != spawnPosition)
+                    {
+                        bool occupied = false;
+                        for (const auto &other : ghosts)
+                        {
+                            if (&other == this)
+                                continue;
+                            if (other.getPosition() == nextPos)
+                            {
+                                occupied = true;
+                                break;
+                            }
+                        }
+
+                        if (occupied)
+                            continue;
+                    }
+
+                    int distance = std::abs(nextPos.x - spawnPosition.x) + std::abs(nextPos.y - spawnPosition.y);
+
+                    if (distance < bestDistance)
+                    {
+                        bestDistance = distance;
+                        bestDir = dir;
+                        foundMove = true;
+                    }
+                }
+            };
+
+            tryPickMove(false);
+            if (!foundMove)
+            {
+                tryPickMove(true);
+            }
+
+            if (foundMove)
+            {
+                startMovement(grid, bestDir);
+            }
         }
     }
 }
@@ -380,8 +447,12 @@ inline bool Ghost::canMove(const Grid &grid, GhostDirection dir) const
         return false;
     }
 
-    // Check for walls
-    return !grid.isWall(newPos.x, newPos.y);
+    // Check for walls (ghosts can pass through ghost-door tiles)
+    if (!grid.isWall(newPos.x, newPos.y))
+        return true;
+
+    return grid.isGhostDoor(newPos.x, newPos.y) &&
+           (state == GhostState::RETURNING || state == GhostState::NORMAL);
 }
 
 // Start movement animation in a direction
