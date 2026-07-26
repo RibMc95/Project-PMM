@@ -6,8 +6,10 @@
 #include <string>
 #include <limits>
 #include <cstdlib>
+#include <queue>
 #include "Grid.h"
 #include "GameConfig.h"
+#include "SpriteSheet.h"
 
 enum class GhostType
 {
@@ -44,10 +46,8 @@ private:
     GhostState state;
     int size;
 
-    // Animation components
-    std::vector<sf::Texture> normalTextures[4]; // 4 directions
-    std::vector<sf::Texture> frightenedTextures;
-    std::vector<sf::Texture> eatenTextures; // Directional textures for eaten/returning state
+    // Graphics: one shared sprite sheet (arcade-style) instead of per-ghost files.
+    const SpriteSheet *sheet = nullptr;
     sf::Sprite sprite;
 
     // Animation timing
@@ -73,14 +73,15 @@ public:
         position = sf::Vector2i(x, y);
         renderPosition = sf::Vector2f(x * size, y * size);
         targetPosition = renderPosition;
-        sprite.setPosition(renderPosition);
+        sprite.setPosition(renderPosition.x + size / 2.0f, renderPosition.y + size / 2.0f);
         isMoving = false;
     }
     // Constructor
-    Ghost(int startX, int startY, GhostType type, int gridSize);
+    Ghost(int startX, int startY, GhostType type, int gridSize, const SpriteSheet &sheetRef);
 
     // Methods
-    bool loadTextures();
+    void applyFrame();          // set texture-rect + tint + flip from state/direction
+    sf::Color bodyTint() const; // per-ghost palette colour (Route A palette swap)
     void updateAnimation();
     void updateMovement(const Grid &grid, const std::vector<Ghost> &ghosts);
     void setState(GhostState newState);
@@ -107,79 +108,103 @@ public:
 };
 
 // Constructor implementation
-inline Ghost::Ghost(int startX, int startY, GhostType type, int gridSize)
+inline Ghost::Ghost(int startX, int startY, GhostType type, int gridSize, const SpriteSheet &sheetRef)
     : position(startX, startY), renderPosition(startX * gridSize, startY * gridSize),
       spawnPosition(startX, startY),
       ghostType(type), direction(GhostDirection::RIGHT), state(GhostState::NORMAL),
-      size(gridSize), animationSpeed(0.3f), currentFrame(0),
+      size(gridSize), sheet(&sheetRef), animationSpeed(0.3f), currentFrame(0),
       movementSpeed(0.4f), isMoving(false), isEaten(false)
 {
     targetPosition = renderPosition;
-    loadTextures();
-    setState(GhostState::NORMAL);
+    // Centre the origin on the 100x100 cell so a negative X scale flips the
+    // sprite in place (LEFT = mirrored RIGHT) without shifting its position.
+    sprite.setOrigin(50.0f, 50.0f);
+    sprite.setPosition(renderPosition.x + size / 2.0f, renderPosition.y + size / 2.0f);
+    applyFrame();
 }
 
-// Load all ghost textures
-inline bool Ghost::loadTextures()
+// Per-ghost palette colour. This is the Route A "palette register": one grey
+// shape is multiplied by this colour to become the coloured ghost.
+inline sf::Color Ghost::bodyTint() const
 {
-    std::string ghostName;
     switch (ghostType)
     {
     case GhostType::JACK:
-        ghostName = "Jack";
-        break;
+        return sf::Color(255, 0, 0); // red    - Chaser
     case GhostType::MIKE:
-        ghostName = "Mike";
-        break;
+        return sf::Color(0, 200, 255); // cyan   - Ambusher
     case GhostType::SAM:
-        ghostName = "Sam";
-        break;
+        return sf::Color(190, 90, 255); // purple - Fickle
     case GhostType::WILL:
-        ghostName = "Will";
-        break;
+        return sf::Color(255, 170, 40); // orange - Bashful
     }
+    return sf::Color::White;
+}
 
-    // Load directional textures
-    sf::Texture upTexture, downTexture, leftTexture, rightTexture;
-    if (!upTexture.loadFromFile("Spookies/" + ghostName + "_Up.png") ||
-        !downTexture.loadFromFile("Spookies/" + ghostName + "_Down.png") ||
-        !leftTexture.loadFromFile("Spookies/" + ghostName + "_Left.png") ||
-        !rightTexture.loadFromFile("Spookies/" + ghostName + "_Right.png"))
+// Pick the sheet frame, tint, and flip that match the current state/direction.
+// This replaces all the old per-texture bookkeeping.
+inline void Ghost::applyFrame()
+{
+    if (!sheet)
+        return;
+
+    sprite.setTexture(sheet->getTexture());
+
+    GhostFrame frame = GhostFrame::BODY_RIGHT;
+    sf::Color tint = sf::Color::White; // White = show the art untinted
+    bool flip = false;                 // LEFT is a mirrored RIGHT (arcade hardware flip)
+
+    if (state == GhostState::FRIGHTENED)
     {
-        return false;
+        // Two-frame blue blink, never tinted, no facing.
+        frame = (currentFrame % 2 == 0) ? GhostFrame::FRIGHT_1 : GhostFrame::FRIGHT_2;
     }
-
-    normalTextures[0].push_back(upTexture);    // UP
-    normalTextures[1].push_back(downTexture);  // DOWN
-    normalTextures[2].push_back(leftTexture);  // LEFT
-    normalTextures[3].push_back(rightTexture); // RIGHT
-
-    // Load frightened textures
-    sf::Texture frightenedTexture1, frightenedTexture2;
-    if (!frightenedTexture1.loadFromFile("Spookies/Spookie_Bonus_1.png") ||
-        !frightenedTexture2.loadFromFile("Spookies/Spookie_Bonus_2.png"))
+    else if (state == GhostState::RETURNING || isEaten)
     {
-        return false;
+        // Eyes only, already coloured, never tinted.
+        switch (direction)
+        {
+        case GhostDirection::UP:
+            frame = GhostFrame::EYES_UP;
+            break;
+        case GhostDirection::DOWN:
+            frame = GhostFrame::EYES_DOWN;
+            break;
+        case GhostDirection::RIGHT:
+            frame = GhostFrame::EYES_RIGHT;
+            break;
+        case GhostDirection::LEFT:
+            frame = GhostFrame::EYES_RIGHT;
+            flip = true;
+            break;
+        }
     }
-    frightenedTextures.push_back(frightenedTexture1);
-    frightenedTextures.push_back(frightenedTexture2);
-
-    // Load eaten texture
-    sf::Texture eatenUpTexture, eatenDownTexture, eatenLeftTexture, eatenRightTexture;
-    if (!eatenUpTexture.loadFromFile("Spookies/eaten_up.png") ||
-        !eatenDownTexture.loadFromFile("Spookies/eaten_down.png") ||
-        !eatenLeftTexture.loadFromFile("Spookies/eaten_left.png") ||
-        !eatenRightTexture.loadFromFile("Spookies/eaten_right.png"))
+    else // NORMAL
     {
-        return false;
+        tint = bodyTint(); // <-- the palette swap happens here
+        switch (direction)
+        {
+        case GhostDirection::UP:
+            frame = GhostFrame::BODY_UP;
+            break;
+        case GhostDirection::DOWN:
+            frame = GhostFrame::BODY_DOWN;
+            break;
+        case GhostDirection::RIGHT:
+            frame = GhostFrame::BODY_RIGHT;
+            break;
+        case GhostDirection::LEFT:
+            frame = GhostFrame::BODY_RIGHT;
+            flip = true;
+            break;
+        }
     }
 
-    eatenTextures.push_back(eatenUpTexture);
-    eatenTextures.push_back(eatenDownTexture);
-    eatenTextures.push_back(eatenLeftTexture);
-    eatenTextures.push_back(eatenRightTexture);
+    sprite.setTextureRect(SpriteSheet::frameRect(frame));
+    sprite.setColor(tint);
 
-    return true;
+    const float s = GameConfig::CHARACTER_SCALE;
+    sprite.setScale(flip ? -s : s, s); // negative X = horizontal mirror about the centred origin
 }
 
 // Update animation frames
@@ -187,31 +212,8 @@ inline void Ghost::updateAnimation()
 {
     if (animationClock.getElapsedTime().asSeconds() >= animationSpeed)
     {
-        if (state == GhostState::FRIGHTENED)
-        {
-            currentFrame = (currentFrame + 1) % frightenedTextures.size();
-            sprite.setTexture(frightenedTextures[currentFrame]);
-        }
-        else if (state == GhostState::RETURNING)
-        {
-            int dirIndex = static_cast<int>(direction);
-            if (dirIndex >= 0 && dirIndex < static_cast<int>(eatenTextures.size()))
-            {
-                sprite.setTexture(eatenTextures[dirIndex]);
-            }
-        }
-        else
-        {
-            // Use normal directional texture
-            int dirIndex = static_cast<int>(direction);
-            if (!normalTextures[dirIndex].empty())
-            {
-                sprite.setTexture(normalTextures[dirIndex][0]);
-            }
-        }
-
-        // Scale the sprite from 100x100 to appropriate size
-        sprite.setScale(GameConfig::SPRITE_SCALE, GameConfig::SPRITE_SCALE);
+        currentFrame++; // drives the frightened two-frame blink
+        applyFrame();
         animationClock.restart();
     }
 }
@@ -231,8 +233,8 @@ inline void Ghost::updateMovement(const Grid &grid, const std::vector<Ghost> &gh
             position = sf::Vector2i(targetPosition.x / size, targetPosition.y / size);
             isMoving = false;
 
-            // If eaten and reached spawn, reset to normal
-            if (isEaten && position == spawnPosition)
+            // If eaten and reached a ghost spawn tile, reset to normal
+            if (isEaten && (position == spawnPosition || grid.isGhostSpawn(position.x, position.y)))
             {
                 std::cout << "Ghost reached spawn at (" << position.x << "," << position.y << "). Resetting to NORMAL." << std::endl;
                 isEaten = false;
@@ -247,7 +249,7 @@ inline void Ghost::updateMovement(const Grid &grid, const std::vector<Ghost> &gh
             renderPosition.y = startPos.y + (targetPosition.y - startPos.y) * progress;
         }
 
-        sprite.setPosition(renderPosition);
+        sprite.setPosition(renderPosition.x + size / 2.0f, renderPosition.y + size / 2.0f);
     }
     else if (isEaten)
     {
@@ -256,7 +258,6 @@ inline void Ghost::updateMovement(const Grid &grid, const std::vector<Ghost> &gh
         {
             std::cout << "Ghost moving from (" << position.x << "," << position.y << ") to spawn (" << spawnPosition.x << "," << spawnPosition.y << ")" << std::endl;
             GhostDirection bestDir = direction;
-            int bestDistance = std::numeric_limits<int>::max();
             bool foundMove = false;
 
             GhostDirection directions[] = {
@@ -281,18 +282,53 @@ inline void Ghost::updateMovement(const Grid &grid, const std::vector<Ghost> &gh
                 return GhostDirection::UP;
             };
 
-            GhostDirection opposite = oppositeOf(direction);
-
-            auto tryPickMove = [&](bool allowReverse)
+            auto isPassable = [&](int x, int y)
             {
+                if (!grid.isValidPosition(x, y))
+                    return false;
+                if (!grid.isWall(x, y))
+                    return true;
+                return grid.isGhostDoor(x, y) || grid.isGhostSpawn(x, y);
+            };
+
+            auto isOccupied = [&](const sf::Vector2i &pos)
+            {
+                if (pos == spawnPosition || grid.isGhostSpawn(pos.x, pos.y))
+                    return false;
+                for (const auto &other : ghosts)
+                {
+                    if (&other == this)
+                        continue;
+                    if (other.getPosition() == pos)
+                        return true;
+                }
+                return false;
+            };
+
+            // BFS to the nearest ghost spawn tile (or original spawn position)
+            int width = grid.getWidth();
+            int height = grid.getHeight();
+            std::vector<std::vector<bool>> visited(height, std::vector<bool>(width, false));
+            std::vector<std::vector<sf::Vector2i>> prev(height, std::vector<sf::Vector2i>(width, sf::Vector2i(-1, -1)));
+            std::queue<sf::Vector2i> q;
+            q.push(position);
+            visited[position.y][position.x] = true;
+
+            sf::Vector2i target(-1, -1);
+            while (!q.empty())
+            {
+                sf::Vector2i cur = q.front();
+                q.pop();
+
+                if (grid.isGhostSpawn(cur.x, cur.y) || cur == spawnPosition)
+                {
+                    target = cur;
+                    break;
+                }
+
                 for (GhostDirection dir : directions)
                 {
-                    if (!allowReverse && dir == opposite)
-                        continue;
-                    if (!canMove(grid, dir))
-                        continue;
-
-                    sf::Vector2i nextPos = position;
+                    sf::Vector2i nextPos = cur;
                     switch (dir)
                     {
                     case GhostDirection::UP:
@@ -308,39 +344,95 @@ inline void Ghost::updateMovement(const Grid &grid, const std::vector<Ghost> &gh
                         nextPos.x++;
                         break;
                     }
-                    if (nextPos != spawnPosition)
+
+                    if (!isPassable(nextPos.x, nextPos.y))
+                        continue;
+                    if (visited[nextPos.y][nextPos.x])
+                        continue;
+
+                    visited[nextPos.y][nextPos.x] = true;
+                    prev[nextPos.y][nextPos.x] = cur;
+                    q.push(nextPos);
+                }
+            }
+
+            if (target.x != -1 && target != position)
+            {
+                sf::Vector2i step = target;
+                while (prev[step.y][step.x] != position && prev[step.y][step.x].x != -1)
+                {
+                    step = prev[step.y][step.x];
+                }
+
+                if (prev[step.y][step.x] == position)
+                {
+                    sf::Vector2i delta = step - position;
+                    if (delta.x == 1)
+                        bestDir = GhostDirection::RIGHT;
+                    else if (delta.x == -1)
+                        bestDir = GhostDirection::LEFT;
+                    else if (delta.y == 1)
+                        bestDir = GhostDirection::DOWN;
+                    else if (delta.y == -1)
+                        bestDir = GhostDirection::UP;
+
+                    if (!isOccupied(step))
                     {
-                        bool occupied = false;
-                        for (const auto &other : ghosts)
-                        {
-                            if (&other == this)
-                                continue;
-                            if (other.getPosition() == nextPos)
-                            {
-                                occupied = true;
-                                break;
-                            }
-                        }
-
-                        if (occupied)
-                            continue;
-                    }
-
-                    int distance = std::abs(nextPos.x - spawnPosition.x) + std::abs(nextPos.y - spawnPosition.y);
-
-                    if (distance < bestDistance)
-                    {
-                        bestDistance = distance;
-                        bestDir = dir;
                         foundMove = true;
                     }
                 }
-            };
+            }
 
-            tryPickMove(false);
             if (!foundMove)
             {
-                tryPickMove(true);
+                int bestDistance = std::numeric_limits<int>::max();
+                GhostDirection opposite = oppositeOf(direction);
+
+                auto tryPickMove = [&](bool allowReverse)
+                {
+                    for (GhostDirection dir : directions)
+                    {
+                        if (!allowReverse && dir == opposite)
+                            continue;
+                        if (!canMove(grid, dir))
+                            continue;
+
+                        sf::Vector2i nextPos = position;
+                        switch (dir)
+                        {
+                        case GhostDirection::UP:
+                            nextPos.y--;
+                            break;
+                        case GhostDirection::DOWN:
+                            nextPos.y++;
+                            break;
+                        case GhostDirection::LEFT:
+                            nextPos.x--;
+                            break;
+                        case GhostDirection::RIGHT:
+                            nextPos.x++;
+                            break;
+                        }
+
+                        if (isOccupied(nextPos))
+                            continue;
+
+                        int distance = std::abs(nextPos.x - spawnPosition.x) + std::abs(nextPos.y - spawnPosition.y);
+
+                        if (distance < bestDistance)
+                        {
+                            bestDistance = distance;
+                            bestDir = dir;
+                            foundMove = true;
+                        }
+                    }
+                };
+
+                tryPickMove(false);
+                if (!foundMove)
+                {
+                    tryPickMove(true);
+                }
             }
 
             if (foundMove)
@@ -359,36 +451,7 @@ inline void Ghost::setState(GhostState newState)
         state = newState;
         currentFrame = 0;
         animationClock.restart();
-
-        // Update texture based on new state
-        if (state == GhostState::FRIGHTENED && !frightenedTextures.empty())
-        {
-            sprite.setTexture(frightenedTextures[0]);
-        }
-        else if (state == GhostState::RETURNING)
-        {
-            std::cout << "DEBUG: Ghost setState RETURNING. eatenTextures.size()=" << eatenTextures.size() << ", direction=" << static_cast<int>(direction) << std::endl;
-            int dirIndex = static_cast<int>(direction);
-            if (dirIndex >= 0 && dirIndex < static_cast<int>(eatenTextures.size()))
-            {
-                std::cout << "DEBUG: Setting eaten texture at index " << dirIndex << std::endl;
-                sprite.setTexture(eatenTextures[dirIndex]);
-            }
-            else
-            {
-                std::cout << "DEBUG: WARNING - dirIndex " << dirIndex << " out of range for eatenTextures!" << std::endl;
-            }
-        }
-        else
-        {
-            int dirIndex = static_cast<int>(direction);
-            if (!normalTextures[dirIndex].empty())
-            {
-                sprite.setTexture(normalTextures[dirIndex][0]);
-            }
-        }
-
-        sprite.setScale(GameConfig::SPRITE_SCALE, GameConfig::SPRITE_SCALE);
+        applyFrame();
     }
 }
 
@@ -396,27 +459,7 @@ inline void Ghost::setState(GhostState newState)
 inline void Ghost::setDirection(GhostDirection newDirection)
 {
     direction = newDirection;
-    // Update texture when direction changes
-    int dirIndex = static_cast<int>(direction);
-
-    if (state == GhostState::FRIGHTENED)
-    {
-        return;
-    }
-
-    if (state == GhostState::RETURNING)
-    {
-        if (dirIndex >= 0 && dirIndex < static_cast<int>(eatenTextures.size()))
-        {
-            sprite.setTexture(eatenTextures[dirIndex]);
-        }
-    }
-    else if (!normalTextures[dirIndex].empty())
-    {
-        sprite.setTexture(normalTextures[dirIndex][0]);
-    }
-
-    sprite.setScale(GameConfig::SPRITE_SCALE, GameConfig::SPRITE_SCALE);
+    applyFrame(); // refresh texture-rect / flip for the new facing
 }
 
 // Check if ghost can move in a direction

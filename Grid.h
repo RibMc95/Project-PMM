@@ -11,45 +11,59 @@
 // Enum for image tile types
 enum class ImageTileType
 {
-    WALL,         // Blue or Black
-    PELLET,       //
+    WALL,         // Blue
+    PELLET,       // Orange
     POWER_PELLET, // Red
-    EMPTY,        //
+    EMPTY,        // Brown (walkable floor), or anything far from the legend
     PLAYER_START, // Cyan
     GHOST_SPAWN,  // Green
     GHOST_DOOR,   // Magenta (ghost-only gate)
-    SCOREBOARD    // Grey
+    SCOREBOARD,   // Grey
+    TELEPORT      // Pink (side-to-side tunnel)
 };
 
-// Helper to map RGB to ImageTileType
+// The one canonical colour legend for authoring maps. Each map tile is drawn
+// in one of these colours; add a row here to add a tile type.
+struct MazeLegendEntry
+{
+    int r, g, b;
+    ImageTileType type;
+};
+
+static const MazeLegendEntry MAZE_LEGEND[] = {
+    {0, 14, 214, ImageTileType::WALL},          // blue
+    {255, 126, 0, ImageTileType::PELLET},       // orange
+    {70, 70, 70, ImageTileType::SCOREBOARD},    // grey
+    {156, 90, 60, ImageTileType::EMPTY},        // brown = walkable floor
+    {168, 230, 29, ImageTileType::GHOST_SPAWN}, // yellow-green
+    {237, 28, 36, ImageTileType::POWER_PELLET}, // red
+    {0, 183, 239, ImageTileType::PLAYER_START}, // cyan
+    {255, 0, 255, ImageTileType::GHOST_DOOR},   // magenta
+    {255, 163, 177, ImageTileType::TELEPORT},   // pink = side-to-side tunnel
+};
+
+// Classify a pixel to the NEAREST legend colour (squared RGB distance). This is
+// what makes maps robust: a colour only has to be *close* to a legend entry, not
+// an exact match. Anything farther than MAX_DIST from every entry is EMPTY floor.
 static inline ImageTileType getTileTypeFromColor(const sf::Color &color)
 {
-    // Orange: Pellet (255,126,0) ±40
-    if (abs(color.r - 255) < 40 && abs(color.g - 126) < 40 && abs(color.b - 0) < 40)
-        return ImageTileType::PELLET;
-    // Red: Power pellet (237,28,36) ±40
-    if (abs(color.r - 237) < 40 && abs(color.g - 28) < 40 && abs(color.b - 36) < 40)
-        return ImageTileType::POWER_PELLET;
-    // Grey: Scoreboard (70,70,70) ±20
-    if (abs(color.r - 70) < 20 && abs(color.g - 70) < 20 && abs(color.b - 70) < 20)
-        return ImageTileType::SCOREBOARD;
-    // Cyan: Player start (0,183,239) ±20
-    if (abs(color.r - 0) < 20 && abs(color.g - 183) < 20 && abs(color.b - 239) < 20)
-        return ImageTileType::PLAYER_START;
-    // Green: Ghost spawn (168,230,29) ±10
-    if (abs(color.r - 168) < 10 && abs(color.g - 230) < 10 && abs(color.b - 29) < 10)
-        return ImageTileType::GHOST_SPAWN;
-    // Magenta: Ghost door (255,0,255) ±10
-    if (abs(color.r - 255) < 10 && abs(color.g - 0) < 10 && abs(color.b - 255) < 10)
-        return ImageTileType::GHOST_DOOR;
-    // Blue: Wall (0,14,214) ±5 tolerance for PNG/SFML shifts
-    if (abs(color.r - 0) <= 5 && abs(color.g - 14) <= 5 && abs(color.b - 214) <= 5)
-        return ImageTileType::WALL;
-    // Black: Wall (0,0,0)
-    if (color.r < 20 && color.g < 20 && color.b < 20)
-        return ImageTileType::WALL;
-    // Everything else: Empty (not wall)
-    return ImageTileType::EMPTY;
+    const int MAX_DIST_SQ = 100 * 100; // ~how far a colour may stray and still match
+    int bestDistSq = MAX_DIST_SQ + 1;
+    ImageTileType best = ImageTileType::EMPTY;
+
+    for (const MazeLegendEntry &e : MAZE_LEGEND)
+    {
+        int dr = static_cast<int>(color.r) - e.r;
+        int dg = static_cast<int>(color.g) - e.g;
+        int db = static_cast<int>(color.b) - e.b;
+        int distSq = dr * dr + dg * dg + db * db;
+        if (distSq < bestDistSq)
+        {
+            bestDistSq = distSq;
+            best = e.type;
+        }
+    }
+    return best;
 }
 
 // Enhanced CellType enum using bit flags
@@ -62,7 +76,8 @@ enum CellType
     GHOST_SPAWN = 8,   // 1000
     PLAYER_START = 16, // 10000
     GHOST_DOOR = 32,   // 100000
-    SCOREBOARD = 64    // 1000000
+    SCOREBOARD = 64,   // 1000000
+    TELEPORT = 128     // 10000000
 };
 
 // Operator overloads for bit flag operations
@@ -93,6 +108,9 @@ private:
     int playerStartY = -1;
     int ghostSpawnX = -1;
     int ghostSpawnY = -1;
+
+    // Tunnel/teleport tiles (side-to-side warp). Expected: exactly two.
+    std::vector<sf::Vector2i> teleportTiles;
 
 public:
     // Constructor
@@ -131,6 +149,8 @@ public:
     bool isGhostSpawn(int x, int y) const;
     bool isGhostDoor(int x, int y) const;
     bool isScoreboard(int x, int y) const;
+    bool isTeleport(int x, int y) const;
+    sf::Vector2i getTeleportPartner(int x, int y) const;
     void setPlayerStart(int x, int y);
     void setGhostSpawn(int x, int y);
 
@@ -361,6 +381,22 @@ inline bool Grid::isScoreboard(int x, int y) const
     return hasFlag(x, y, SCOREBOARD);
 }
 
+inline bool Grid::isTeleport(int x, int y) const
+{
+    return hasFlag(x, y, TELEPORT);
+}
+
+// Return the paired tunnel tile (the other teleport tile). Assumes exactly two.
+inline sf::Vector2i Grid::getTeleportPartner(int x, int y) const
+{
+    for (const auto &t : teleportTiles)
+    {
+        if (t.x != x || t.y != y)
+            return t;
+    }
+    return sf::Vector2i(-1, -1);
+}
+
 inline void Grid::setPlayerStart(int x, int y)
 {
     // Remove previous player start if it exists
@@ -436,34 +472,18 @@ inline bool Grid::loadMazeFromImage(const std::string &filename)
 
             sf::Color pixelColor = image.getPixel(pixelX, pixelY);
 
-            // Debug first few pixels
-            if (x < 5 && y < 5)
+            // One legend, one classification. Nearest-colour matching means a
+            // map only has to be *close* to the legend colours, not exact.
+            switch (getTileTypeFromColor(pixelColor))
             {
-                int brightness = (pixelColor.r + pixelColor.g + pixelColor.b) / 3;
-                std::cout << "Pixel (" << x << "," << y << ") RGB(" << (int)pixelColor.r
-                          << "," << (int)pixelColor.g << "," << (int)pixelColor.b
-                          << ") brightness=" << brightness << std::endl;
-            }
-
-            // Only treat blue/black as walls for rendering
-            if ((pixelColor.r < 40 && pixelColor.g < 40 && pixelColor.b < 40) ||                             // black
-                (abs(pixelColor.r - 0) <= 5 && abs(pixelColor.g - 14) <= 5 && abs(pixelColor.b - 214) <= 5)) // blue (±5 tolerance)
-            {
+            case ImageTileType::WALL:
                 addFlag(x, y, WALL);
-            }
-
-            // Use enum map only for logic (object placement)
-            ImageTileType tileType = getTileTypeFromColor(pixelColor);
-            switch (tileType)
-            {
+                break;
             case ImageTileType::PELLET:
-                // Only place pellet if not wall, ghost spawn, or player start
-                if (!hasFlag(x, y, WALL) && !hasFlag(x, y, GHOST_SPAWN) && !hasFlag(x, y, PLAYER_START))
-                    addFlag(x, y, PELLET);
+                addFlag(x, y, PELLET);
                 break;
             case ImageTileType::POWER_PELLET:
-                if (!hasFlag(x, y, WALL) && !hasFlag(x, y, GHOST_SPAWN) && !hasFlag(x, y, PLAYER_START))
-                    addFlag(x, y, POWER_PELLET);
+                addFlag(x, y, POWER_PELLET);
                 break;
             case ImageTileType::PLAYER_START:
                 addFlag(x, y, PLAYER_START);
@@ -473,16 +493,18 @@ inline bool Grid::loadMazeFromImage(const std::string &filename)
                 break;
             case ImageTileType::GHOST_DOOR:
                 addFlag(x, y, GHOST_DOOR);
-                addFlag(x, y, WALL); // Door blocks player but ghosts can pass
+                addFlag(x, y, WALL); // door blocks the player; ghosts pass via canMove()
                 break;
             case ImageTileType::SCOREBOARD:
                 addFlag(x, y, SCOREBOARD);
                 break;
-            case ImageTileType::WALL:
+            case ImageTileType::TELEPORT:
+                addFlag(x, y, TELEPORT);
+                teleportTiles.emplace_back(x, y);
+                break;
             case ImageTileType::EMPTY:
             default:
-                // No flag for empty or wall (wall already handled above)
-                break;
+                break; // walkable floor — no flag
             }
         }
     }
@@ -506,6 +528,7 @@ inline void Grid::clearMaze()
     playerStartY = -1;
     ghostSpawnX = -1;
     ghostSpawnY = -1;
+    teleportTiles.clear();
 }
 
 #endif // GRID_H

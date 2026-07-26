@@ -19,6 +19,15 @@ namespace GameConfig
     // Sprite scaling factor (to scale from 100x100 to SPRITE_SIZE)
     const float SPRITE_SCALE = static_cast<float>(SPRITE_SIZE) / 100.0f; // 0.32f
 
+    // Characters (muncher/ghosts) render a bit larger than one cell so their
+    // padded 100x100 art fills the tile. Safe because they use a centred origin,
+    // so the transparent overflow stays invisible. Tune the multiplier to taste.
+    const float CHARACTER_SCALE = SPRITE_SCALE * 1.5f; // ~0.48f
+
+    // The maze image the game loads. Edit this ONE file (or point this at
+    // another) to change the level. ("enum map.png" was an unused duplicate.)
+    const char *const MAZE_IMAGE = "practice grid 3.png";
+
     // Alternative scaled-up option for modern displays (uncomment to use)
     /*
     const int CELL_SIZE = 16;    // 2x scale

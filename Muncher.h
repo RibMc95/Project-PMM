@@ -6,6 +6,7 @@
 #include <string>
 #include "Grid.h"
 #include "GameConfig.h"
+#include "SpriteSheet.h"
 
 enum class MuncherDirection // Direction enum for Muncher
 {
@@ -31,10 +32,8 @@ private:
     MuncherState state;          // Current animation state
     int size;                    // Size of the muncher (grid cell size)
 
-    // Animation components
-    std::vector<sf::Texture> idleTextures;
-    std::vector<sf::Texture> movingTextures;
-    std::vector<sf::Texture> deathTextures;
+    // Graphics: one shared sprite sheet (arcade-style) instead of per-state files.
+    const SpriteSheet *sheet = nullptr;
     sf::Sprite sprite;
 
     // Animation timing
@@ -50,10 +49,10 @@ private:
 
 public:
     // Constructor
-    Muncher(int startX, int startY, int gridSize);
+    Muncher(int startX, int startY, int gridSize, const SpriteSheet &sheetRef);
 
     // Animation methods
-    bool loadTextures();
+    void applyFrame(); // set texture-rect + rotation from state/direction
     void updateAnimation();
     void updateMovement();
     void setState(MuncherState newState);
@@ -90,54 +89,63 @@ public:
 };
 
 // Constructor implementation
-inline Muncher::Muncher(int startX, int startY, int gridSize)
+inline Muncher::Muncher(int startX, int startY, int gridSize, const SpriteSheet &sheetRef)
     : position(startX, startY), renderPosition(startX * gridSize, startY * gridSize),
       direction(MuncherDirection::RIGHT), state(MuncherState::IDLE),
-      size(gridSize), animationSpeed(0.2f), currentFrame(0),
+      size(gridSize), sheet(&sheetRef), animationSpeed(0.2f), currentFrame(0),
       movementSpeed(0.3f), isMoving(false)
 {
     targetPosition = renderPosition;
-    loadTextures();
-    setState(MuncherState::IDLE);
-    // Set initial sprite position with origin offset
+    sprite.setOrigin(50.0f, 50.0f); // centre of a 100x100 cell (rotation pivot)
     sprite.setPosition(renderPosition.x + gridSize / 2.0f, renderPosition.y + gridSize / 2.0f);
+    applyFrame();
 }
 
-// Load all PNG textures
-inline bool Muncher::loadTextures()
+// Pick the sheet frame + rotation for the current state/direction.
+inline void Muncher::applyFrame()
 {
-    // Load idle texture
-    sf::Texture idleTexture;
-    if (!idleTexture.loadFromFile("muncher/Munch_idle.png"))
-    {
-        return false;
-    }
-    idleTextures.push_back(idleTexture);
+    if (!sheet)
+        return;
 
-    // Load moving textures
-    sf::Texture moveTexture1, moveTexture2;
-    if (!moveTexture1.loadFromFile("muncher/Munch_1.png") || !moveTexture2.loadFromFile("muncher/Munch_2.png"))
-    {
-        return false;
-    }
-    movingTextures.push_back(moveTexture1);
-    movingTextures.push_back(moveTexture2);
+    sprite.setTexture(sheet->getTexture());
 
-    // Load death textures
-    sf::Texture deathTexture1, deathTexture2, deathTexture3, deathTextureFinal;
-    if (!deathTexture1.loadFromFile("muncher/Muncher_death_1.png") ||
-        !deathTexture2.loadFromFile("muncher/Muncher_death_2.png") ||
-        !deathTexture3.loadFromFile("muncher/Muncher_death_3.png") ||
-        !deathTextureFinal.loadFromFile("muncher/Muncher_death_final.png"))
+    MuncherFrame frame = MuncherFrame::IDLE;
+    switch (state)
     {
-        return false;
+    case MuncherState::IDLE:
+        frame = MuncherFrame::IDLE;
+        break;
+    case MuncherState::MOVING:
+        frame = (currentFrame % 2 == 0) ? MuncherFrame::MOVE_1 : MuncherFrame::MOVE_2;
+        break;
+    case MuncherState::DYING:
+    {
+        const MuncherFrame deaths[4] = {MuncherFrame::DEATH_1, MuncherFrame::DEATH_2,
+                                        MuncherFrame::DEATH_3, MuncherFrame::DEATH_FINAL};
+        frame = deaths[currentFrame % 4];
+        break;
     }
-    deathTextures.push_back(deathTexture1);
-    deathTextures.push_back(deathTexture2);
-    deathTextures.push_back(deathTexture3);
-    deathTextures.push_back(deathTextureFinal);
+    }
 
-    return true;
+    sprite.setTextureRect(SpriteSheet::frameRect(frame));
+    sprite.setScale(GameConfig::CHARACTER_SCALE, GameConfig::CHARACTER_SCALE);
+
+    // Pac is radially symmetric, so ONE facing rotated four ways covers every direction.
+    switch (direction)
+    {
+    case MuncherDirection::RIGHT:
+        sprite.setRotation(0.0f);
+        break;
+    case MuncherDirection::DOWN:
+        sprite.setRotation(90.0f);
+        break;
+    case MuncherDirection::LEFT:
+        sprite.setRotation(180.0f);
+        break;
+    case MuncherDirection::UP:
+        sprite.setRotation(270.0f);
+        break;
+    }
 }
 
 // Update animation frames
@@ -145,46 +153,8 @@ inline void Muncher::updateAnimation()
 {
     if (animationClock.getElapsedTime().asSeconds() >= animationSpeed)
     {
-        std::vector<sf::Texture> *currentTextures = nullptr;
-
-        switch (state)
-        {
-        case MuncherState::IDLE:
-            currentTextures = &idleTextures;
-            break;
-        case MuncherState::MOVING:
-            currentTextures = &movingTextures;
-            break;
-        case MuncherState::DYING:
-            currentTextures = &deathTextures;
-            break;
-        }
-
-        if (currentTextures && !currentTextures->empty())
-        {
-            currentFrame = (currentFrame + 1) % currentTextures->size();
-            sprite.setTexture((*currentTextures)[currentFrame]);
-            sprite.setScale(GameConfig::SPRITE_SCALE, GameConfig::SPRITE_SCALE);
-
-            // Set rotation based on direction
-            sprite.setOrigin(50.0f, 50.0f); // Set origin to center of 100x100 sprite
-            switch (direction)
-            {
-            case MuncherDirection::RIGHT:
-                sprite.setRotation(0.0f);
-                break;
-            case MuncherDirection::DOWN:
-                sprite.setRotation(90.0f);
-                break;
-            case MuncherDirection::LEFT:
-                sprite.setRotation(180.0f);
-                break;
-            case MuncherDirection::UP:
-                sprite.setRotation(270.0f);
-                break;
-            }
-        }
-
+        currentFrame++;
+        applyFrame();
         animationClock.restart();
     }
 }
@@ -226,45 +196,7 @@ inline void Muncher::setState(MuncherState newState)
         state = newState;
         currentFrame = 0;
         animationClock.restart();
-
-        // Set initial texture for the new state
-        std::vector<sf::Texture> *currentTextures = nullptr;
-        switch (state)
-        {
-        case MuncherState::IDLE:
-            currentTextures = &idleTextures;
-            break;
-        case MuncherState::MOVING:
-            currentTextures = &movingTextures;
-            break;
-        case MuncherState::DYING:
-            currentTextures = &deathTextures;
-            break;
-        }
-
-        if (currentTextures && !currentTextures->empty())
-        {
-            sprite.setTexture((*currentTextures)[0]);
-            sprite.setScale(GameConfig::SPRITE_SCALE, GameConfig::SPRITE_SCALE);
-
-            // Set rotation based on direction
-            sprite.setOrigin(50.0f, 50.0f); // Set origin to center of 100x100 sprite
-            switch (direction)
-            {
-            case MuncherDirection::RIGHT:
-                sprite.setRotation(0.0f);
-                break;
-            case MuncherDirection::DOWN:
-                sprite.setRotation(90.0f);
-                break;
-            case MuncherDirection::LEFT:
-                sprite.setRotation(180.0f);
-                break;
-            case MuncherDirection::UP:
-                sprite.setRotation(270.0f);
-                break;
-            }
-        }
+        applyFrame();
     }
 }
 
@@ -314,14 +246,8 @@ inline void Muncher::startMovement(const Grid &grid, MuncherDirection dir)
         return; // Already moving
     }
 
-    if (!canMove(grid, dir))
-    {
-        return; // Can't move in that direction
-    }
-
-    direction = dir;
+    // Compute the target tile once.
     sf::Vector2i newGridPos = position;
-
     switch (dir)
     {
     case MuncherDirection::UP:
@@ -338,6 +264,30 @@ inline void Muncher::startMovement(const Grid &grid, MuncherDirection dir)
         break;
     }
 
+    // Tunnel warp: stepping off the map edge from a teleport tile emerges at the
+    // paired teleport tile on the far side, still facing the same way.
+    if (!grid.isValidPosition(newGridPos.x, newGridPos.y) && grid.isTeleport(position.x, position.y))
+    {
+        sf::Vector2i partner = grid.getTeleportPartner(position.x, position.y);
+        if (partner.x != -1)
+        {
+            direction = dir;
+            position = partner;
+            renderPosition = sf::Vector2f(partner.x * size, partner.y * size);
+            targetPosition = renderPosition;
+            sprite.setPosition(renderPosition.x + size / 2.0f, renderPosition.y + size / 2.0f);
+            isMoving = false; // snapped across, not interpolated
+            setState(MuncherState::MOVING);
+            return;
+        }
+    }
+
+    if (!canMove(grid, dir))
+    {
+        return; // Can't move in that direction
+    }
+
+    direction = dir;
     targetPosition = sf::Vector2f(newGridPos.x * size, newGridPos.y * size);
     isMoving = true;
     setState(MuncherState::MOVING);

@@ -12,23 +12,20 @@
 #include "GameConfig.h"
 
 // Function to draw the maze walls and pellets with clear visual mapping
-void drawGame(sf::RenderWindow &window, const Grid &grid, const PelletGrid &pelletGrid)
+void drawGame(sf::RenderWindow &window, const Grid &grid, const PelletGrid &pelletGrid, const SpriteSheet &sheet)
 {
     // Define clear visual mappings for each tile type
     sf::RectangleShape wallBlock(sf::Vector2f(GameConfig::CELL_SIZE, GameConfig::CELL_SIZE));
     wallBlock.setFillColor(sf::Color::Blue); // Classic Pac-Man blue walls
 
-    sf::RectangleShape ghostSpawnBlock(sf::Vector2f(GameConfig::CELL_SIZE, GameConfig::CELL_SIZE));
-    ghostSpawnBlock.setFillColor(sf::Color(100, 100, 100)); // Dark gray for ghost spawn area
+    // Pellet dots drawn from the shared sheet (row 2 cells) instead of circles.
+    sf::Sprite pelletSprite(sheet.getTexture(), SpriteSheet::frameRect(PelletFrame::PELLET));
+    pelletSprite.setScale(GameConfig::SPRITE_SCALE, GameConfig::SPRITE_SCALE);
 
-    sf::RectangleShape playerStartBlock(sf::Vector2f(GameConfig::CELL_SIZE, GameConfig::CELL_SIZE));
-    playerStartBlock.setFillColor(sf::Color(0, 100, 0)); // Dark green for player start
-
-    sf::CircleShape pelletShape(3.0f);
-    pelletShape.setFillColor(sf::Color::Yellow); // Yellow pellets
-
-    sf::CircleShape powerPelletShape(8.0f);
-    powerPelletShape.setFillColor(sf::Color(255, 255, 100)); // Brighter yellow for power pellets
+    // Power pellet drawn much bigger (and centred) so it's unmistakable next to a normal dot.
+    sf::Sprite powerSprite(sheet.getTexture(), SpriteSheet::frameRect(PelletFrame::POWER));
+    powerSprite.setScale(GameConfig::SPRITE_SCALE * 2.5f, GameConfig::SPRITE_SCALE * 2.5f);
+    powerSprite.setOrigin(50.0f, 50.0f); // centre of the 100x100 cell art so it scales in place
 
     // Add a subtle background grid for empty spaces (optional)
     sf::RectangleShape emptyBlock(sf::Vector2f(GameConfig::CELL_SIZE, GameConfig::CELL_SIZE));
@@ -53,41 +50,20 @@ void drawGame(sf::RenderWindow &window, const Grid &grid, const PelletGrid &pell
                 wallBlock.setPosition(pixelX, pixelY);
                 window.draw(wallBlock);
             }
-            // Removed TRANSPARENT and TELEPORT tile drawing
-            else if (grid.isGhostSpawn(x, y))
-            {
-                // Draw green tile for ghost spawn
-                sf::RectangleShape ghostSpawnTile(sf::Vector2f(GameConfig::CELL_SIZE, GameConfig::CELL_SIZE));
-                ghostSpawnTile.setFillColor(sf::Color(0, 255, 0)); // Bright green
-                ghostSpawnTile.setPosition(pixelX, pixelY);
-                window.draw(ghostSpawnTile);
-            }
-            else if (grid.isPlayerStart(x, y))
-            {
-                // Draw cyan tile for player start
-                sf::RectangleShape playerStartTile(sf::Vector2f(GameConfig::CELL_SIZE, GameConfig::CELL_SIZE));
-                playerStartTile.setFillColor(sf::Color(0, 255, 255)); // Cyan
-                playerStartTile.setPosition(pixelX, pixelY);
-                window.draw(playerStartTile);
-            }
-            else if (grid.isScoreboard(x, y))
-            {
-                // Draw grey tile for scoreboard (if you want to visualize it)
-                sf::RectangleShape scoreboardTile(sf::Vector2f(GameConfig::CELL_SIZE, GameConfig::CELL_SIZE));
-                scoreboardTile.setFillColor(sf::Color(128, 128, 128));
-                scoreboardTile.setPosition(pixelX, pixelY);
-                window.draw(scoreboardTile);
-            }
+            // Ghost-spawn, player-start, tunnel, and scoreboard tiles are NOT
+            // drawn — they drive logic only ("the magnet under the table"),
+            // leaving a clean all-black-and-blue board. The score TEXT still
+            // renders on top of the (now dark) scoreboard region below.
             // Draw pellets and power pellets on top if present
             if (pelletGrid.hasPowerPellet(x, y))
             {
-                powerPelletShape.setPosition(pixelX + GameConfig::CELL_SIZE / 2 - 8, pixelY + GameConfig::CELL_SIZE / 2 - 8);
-                window.draw(powerPelletShape);
+                powerSprite.setPosition(pixelX + GameConfig::CELL_SIZE / 2.0f, pixelY + GameConfig::CELL_SIZE / 2.0f);
+                window.draw(powerSprite);
             }
             else if (pelletGrid.hasPellet(x, y))
             {
-                pelletShape.setPosition(pixelX + GameConfig::CELL_SIZE / 2 - 3, pixelY + GameConfig::CELL_SIZE / 2 - 3);
-                window.draw(pelletShape);
+                pelletSprite.setPosition(pixelX, pixelY);
+                window.draw(pelletSprite);
             }
         }
     }
@@ -101,12 +77,15 @@ int main()
         "Munch Maze - Pac-Man Style Game");
     window.setFramerateLimit(60);
 
+    // Build the shared unified sprite sheet once (needs the GL context above).
+    SpriteSheet spriteSheet;
+
     // Initialize game objects using PNG file
     Grid grid(GameConfig::GRID_WIDTH, GameConfig::GRID_HEIGHT, false); // Don't auto-initialize
 
     // Try to load custom maze from PNG first
     std::cout << "\n=== LOADING CUSTOM MAZE ===" << std::endl;
-    bool imageLoaded = grid.loadMazeFromImage("practice grid 3.png");
+    bool imageLoaded = grid.loadMazeFromImage(GameConfig::MAZE_IMAGE);
 
     if (!imageLoaded)
     {
@@ -142,7 +121,7 @@ int main()
     PelletGrid pelletGrid(grid);
 
     // Create Muncher (Pac-Man) at proper spawn point
-    Muncher muncher(grid.getPlayerStartX(), grid.getPlayerStartY(), GameConfig::CELL_SIZE);
+    Muncher muncher(grid.getPlayerStartX(), grid.getPlayerStartY(), GameConfig::CELL_SIZE, spriteSheet);
 
     // Create Ghosts at green GHOST_SPAWN tiles from the grid
     std::vector<std::pair<int, int>> ghostSpawns;
@@ -160,20 +139,20 @@ int main()
     std::vector<Ghost> ghosts;
     if (ghostSpawns.size() >= 4)
     {
-        ghosts.emplace_back(ghostSpawns[0].first, ghostSpawns[0].second, GhostType::JACK, GameConfig::CELL_SIZE); // Red ghost (Chaser)
-        ghosts.emplace_back(ghostSpawns[1].first, ghostSpawns[1].second, GhostType::MIKE, GameConfig::CELL_SIZE); // Blue ghost (Ambusher)
-        ghosts.emplace_back(ghostSpawns[2].first, ghostSpawns[2].second, GhostType::SAM, GameConfig::CELL_SIZE);  // Purple ghost (Fickle)
-        ghosts.emplace_back(ghostSpawns[3].first, ghostSpawns[3].second, GhostType::WILL, GameConfig::CELL_SIZE); // Yellow ghost (Bashful)
+        ghosts.emplace_back(ghostSpawns[0].first, ghostSpawns[0].second, GhostType::JACK, GameConfig::CELL_SIZE, spriteSheet); // Red ghost (Chaser)
+        ghosts.emplace_back(ghostSpawns[1].first, ghostSpawns[1].second, GhostType::MIKE, GameConfig::CELL_SIZE, spriteSheet); // Blue ghost (Ambusher)
+        ghosts.emplace_back(ghostSpawns[2].first, ghostSpawns[2].second, GhostType::SAM, GameConfig::CELL_SIZE, spriteSheet);  // Purple ghost (Fickle)
+        ghosts.emplace_back(ghostSpawns[3].first, ghostSpawns[3].second, GhostType::WILL, GameConfig::CELL_SIZE, spriteSheet); // Yellow ghost (Bashful)
     }
     else
     {
         // Fallback: spawn all at the first found or default location
         int gx = ghostSpawns.empty() ? grid.getGhostSpawnX() : ghostSpawns[0].first;
         int gy = ghostSpawns.empty() ? grid.getGhostSpawnY() : ghostSpawns[0].second;
-        ghosts.emplace_back(gx, gy, GhostType::JACK, GameConfig::CELL_SIZE);
-        ghosts.emplace_back(gx, gy, GhostType::MIKE, GameConfig::CELL_SIZE);
-        ghosts.emplace_back(gx, gy, GhostType::SAM, GameConfig::CELL_SIZE);
-        ghosts.emplace_back(gx, gy, GhostType::WILL, GameConfig::CELL_SIZE);
+        ghosts.emplace_back(gx, gy, GhostType::JACK, GameConfig::CELL_SIZE, spriteSheet);
+        ghosts.emplace_back(gx, gy, GhostType::MIKE, GameConfig::CELL_SIZE, spriteSheet);
+        ghosts.emplace_back(gx, gy, GhostType::SAM, GameConfig::CELL_SIZE, spriteSheet);
+        ghosts.emplace_back(gx, gy, GhostType::WILL, GameConfig::CELL_SIZE, spriteSheet);
     }
 
     // Initialize Ghost AI Controller
@@ -274,7 +253,7 @@ int main()
             PelletType::GRAPEFRUIT,
             PelletType::PANCAKE};
     int currentFruitIndex = 0;
-    Pellet fruitPellet(13, 18, fruitTypes[currentFruitIndex]); // fruit spawns at center bottom
+    Pellet fruitPellet(13, 18, fruitTypes[currentFruitIndex], spriteSheet); // fruit spawns at center bottom
 
     // Game loop
     while (window.isOpen())
@@ -424,7 +403,7 @@ int main()
         window.clear(sf::Color::Black);
 
         // Draw maze walls and pellets
-        drawGame(window, grid, pelletGrid);
+        drawGame(window, grid, pelletGrid, spriteSheet);
 
         // Draw muncher
         window.draw(muncher.getSprite());

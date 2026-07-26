@@ -3,6 +3,7 @@
 
 #include <SFML/Graphics.hpp>
 #include "GameConfig.h"
+#include "SpriteSheet.h"
 
 enum class PelletType
 {
@@ -22,22 +23,14 @@ private:
     sf::Vector2i position;
     PelletType type;
     sf::Sprite sprite;
-    sf::Texture normalTexture;
-    sf::Texture powerTexture;
-    sf::Texture appleTexture;
-    sf::Texture cherryTexture;
-    sf::Texture strawberryTexture;
-    sf::Texture grapefruitTexture;
-    sf::Texture orangeTexture;
-    sf::Texture pancakeTexture;
+    const SpriteSheet *sheet = nullptr; // shared unified sprite sheet
     bool collected;
 
 public:
     // Constructor
-    Pellet(int x, int y, PelletType pelletType = PelletType::NORMAL);
+    Pellet(int x, int y, PelletType pelletType, const SpriteSheet &sheetRef);
 
     // Methods
-    bool loadTextures();
     void setType(PelletType pelletType);
     bool isCollected() const { return collected; }
     void collect() { collected = true; }
@@ -54,30 +47,11 @@ public:
 };
 
 // Constructor implementation for pellet, power pellet, and fruit types
-inline Pellet::Pellet(int x, int y, PelletType pelletType) : position(x, y), type(pelletType), collected(false)
+inline Pellet::Pellet(int x, int y, PelletType pelletType, const SpriteSheet &sheetRef)
+    : position(x, y), type(pelletType), sheet(&sheetRef), collected(false)
 {
-    loadTextures();
     setType(pelletType);
-
-    // Set position based on grid coordinates
     sprite.setPosition(x * GameConfig::CELL_SIZE, y * GameConfig::CELL_SIZE);
-}
-
-// Load pellet textures
-inline bool Pellet::loadTextures()
-{
-    if (!normalTexture.loadFromFile("Objects/Pellet.png") ||
-        !powerTexture.loadFromFile("Objects/Power Pellet.png") ||
-        !appleTexture.loadFromFile("Objects/Apple.png") ||
-        !cherryTexture.loadFromFile("Objects/Cherry.png") ||
-        !strawberryTexture.loadFromFile("Objects/Strawberry.png") ||
-        !grapefruitTexture.loadFromFile("Objects/Grapefruit.png") ||
-        !orangeTexture.loadFromFile("Objects/Orange.png") ||
-        !pancakeTexture.loadFromFile("Objects/Pancake.png"))
-    {
-        return false;
-    }
-    return true;
 }
 
 // Set pellet type and corresponding texture
@@ -85,32 +59,38 @@ inline void Pellet::setType(PelletType pelletType)
 {
     type = pelletType;
 
-    switch (type)
+    if (sheet)
     {
-    case PelletType::NORMAL:
-        sprite.setTexture(normalTexture);
-        break;
-    case PelletType::POWER:
-        sprite.setTexture(powerTexture);
-        break;
-    case PelletType::APPLE:
-        sprite.setTexture(appleTexture);
-        break;
-    case PelletType::CHERRY:
-        sprite.setTexture(cherryTexture);
-        break;
-    case PelletType::STRAWBERRY:
-        sprite.setTexture(strawberryTexture);
-        break;
-    case PelletType::GRAPEFRUIT:
-        sprite.setTexture(grapefruitTexture);
-        break;
-    case PelletType::ORANGE:
-        sprite.setTexture(orangeTexture);
-        break;
-    case PelletType::PANCAKE:
-        sprite.setTexture(pancakeTexture);
-        break;
+        PelletFrame frame = PelletFrame::PELLET;
+        switch (type)
+        {
+        case PelletType::NORMAL:
+            frame = PelletFrame::PELLET;
+            break;
+        case PelletType::POWER:
+            frame = PelletFrame::POWER;
+            break;
+        case PelletType::APPLE:
+            frame = PelletFrame::APPLE;
+            break;
+        case PelletType::CHERRY:
+            frame = PelletFrame::CHERRY;
+            break;
+        case PelletType::STRAWBERRY:
+            frame = PelletFrame::STRAWBERRY;
+            break;
+        case PelletType::GRAPEFRUIT:
+            frame = PelletFrame::GRAPEFRUIT;
+            break;
+        case PelletType::ORANGE:
+            frame = PelletFrame::ORANGE;
+            break;
+        case PelletType::PANCAKE:
+            frame = PelletFrame::PANCAKE;
+            break;
+        }
+        sprite.setTexture(sheet->getTexture());
+        sprite.setTextureRect(SpriteSheet::frameRect(frame));
     }
 
     // Scale the sprite from 100x100 to appropriate size
