@@ -161,6 +161,13 @@ int main()
     // Points and lives
     PointSystem points;
     int highScore = 0;
+    int frightenedGhostsEaten = 0;      // resets each power pellet; drives the 200/400/800/1600 chain
+    bool muncherDying = false;          // true while the death animation plays
+    sf::Clock deathClock;               // times the death animation
+    const float DEATH_ANIM_TIME = 1.2f; // ~one full death-frame cycle, then a brief hold
+    bool gameOver = false;                                 // true once lives hit 0
+    MuncherDirection desiredDir = MuncherDirection::RIGHT; // buffered input direction
+    bool hasStarted = false;                               // muncher waits for the first key press
 
     // Load UI font
     sf::Font uiFont;
@@ -267,8 +274,72 @@ int main()
             }
         }
 
+        // Game over: out of lives. Freeze on a GAME OVER screen; Space restarts
+        // the whole run (score & lives reset; high score is kept).
+        if (gameOver)
+        {
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
+            {
+                points = PointSystem();
+                pelletGrid = PelletGrid(grid);
+                muncher.reset(grid.getPlayerStartX(), grid.getPlayerStartY());
+                for (auto &ghost : ghosts)
+                    ghost.reset();
+                ghostAI = GhostAI();
+                frightenedGhostsEaten = 0;
+                gameOver = false;
+                hasStarted = false; // fresh game waits for the first key press
+            }
+
+            window.clear(sf::Color::Black);
+            drawGame(window, grid, pelletGrid, spriteSheet);
+            if (fontLoaded)
+            {
+                sf::Text overText;
+                overText.setFont(uiFont);
+                overText.setString("GAME OVER\nPress Space to play again");
+                overText.setCharacterSize(40);
+                overText.setFillColor(sf::Color::Red);
+                sf::FloatRect b = overText.getLocalBounds();
+                overText.setOrigin(b.left + b.width / 2.0f, b.top + b.height / 2.0f);
+                overText.setPosition(GameConfig::WINDOW_WIDTH / 2.0f, GameConfig::WINDOW_HEIGHT / 2.0f);
+                window.draw(overText);
+            }
+            window.display();
+            continue;
+        }
+
+        // Death pause: freeze gameplay, play the muncher's death animation, then
+        // reset everyone to their start tiles. Ghosts are hidden during the death
+        // (classic Pac-Man behaviour).
+        if (muncherDying)
+        {
+            muncher.updateAnimation();
+            if (deathClock.getElapsedTime().asSeconds() >= DEATH_ANIM_TIME)
+            {
+                muncherDying = false;
+                if (points.getLives() == 0)
+                {
+                    gameOver = true; // out of lives -> game over (no respawn)
+                }
+                else
+                {
+                    muncher.reset(grid.getPlayerStartX(), grid.getPlayerStartY());
+                    for (auto &ghost : ghosts)
+                        ghost.reset();
+                    ghostAI = GhostAI();
+                }
+            }
+
+            window.clear(sf::Color::Black);
+            drawGame(window, grid, pelletGrid, spriteSheet);
+            window.draw(muncher.getSprite());
+            window.display();
+            continue;
+        }
+
         // Fruit spawn logic
-        if (!fruitPresent && !waitingForRespawn && fruitTimer.getElapsedTime().asSeconds() >= 45.f) // Spawn fruit every 5 seconds
+        if (!fruitPresent && !waitingForRespawn && fruitTimer.getElapsedTime().asSeconds() >= 45.f) // Spawn the first fruit after 45 seconds
         {
             fruitPresent = true;
             currentFruitIndex = (currentFruitIndex + 1) % fruitTypes.size();
@@ -340,25 +411,36 @@ int main()
             ghost.updateMovement(grid, ghosts);
         }
 
-        // Handle input (basic movement)
-        if (!muncher.getIsMoving())
+        // Handle input: buffer the latest requested direction, then move Pac-Man
+        // style — at each tile take the buffered turn if it's open, otherwise keep
+        // heading the current way. Stays still until the first key press.
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
         {
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
-            {
-                muncher.startMovement(grid, MuncherDirection::UP);
-            }
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down))
-            {
-                muncher.startMovement(grid, MuncherDirection::DOWN);
-            }
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left))
-            {
-                muncher.startMovement(grid, MuncherDirection::LEFT);
-            }
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right))
-            {
-                muncher.startMovement(grid, MuncherDirection::RIGHT);
-            }
+            desiredDir = MuncherDirection::UP;
+            hasStarted = true;
+        }
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down))
+        {
+            desiredDir = MuncherDirection::DOWN;
+            hasStarted = true;
+        }
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left))
+        {
+            desiredDir = MuncherDirection::LEFT;
+            hasStarted = true;
+        }
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right))
+        {
+            desiredDir = MuncherDirection::RIGHT;
+            hasStarted = true;
+        }
+
+        if (hasStarted && !muncher.getIsMoving())
+        {
+            if (muncher.canMove(grid, desiredDir))
+                muncher.startMovement(grid, desiredDir);             // take the buffered turn
+            else
+                muncher.startMovement(grid, muncher.getDirection()); // otherwise keep going
         }
 
         // Check for pellet collisions
@@ -366,16 +448,40 @@ int main()
         int gridX = muncherPos.x;
         int gridY = muncherPos.y;
 
-        // Check for ghost collisions (eating frightened ghosts) using bounding boxes
-        sf::FloatRect muncherBounds = muncher.getSprite().getGlobalBounds();
+        // Ghost contact = overlap within half a cell, measured on the smooth
+        // render positions. This catches head-on passes (mid-tile overlap) and,
+        // unlike the old 1.5x bounding-box test, doesn't trigger a full tile away.
+        sf::Vector2f muncherRender = muncher.getRenderPosition();
+        const float contactDist = GameConfig::CELL_SIZE * 0.5f;
         for (auto &ghost : ghosts)
         {
-            sf::FloatRect ghostBounds = ghost.getSprite().getGlobalBounds();
-            if (muncherBounds.intersects(ghostBounds) && ghost.getState() == GhostState::FRIGHTENED && !ghost.getIsEaten())
+            sf::Vector2f g = ghost.getRenderPosition();
+            float dx = muncherRender.x - g.x;
+            float dy = muncherRender.y - g.y;
+            bool touching = (dx * dx + dy * dy) < (contactDist * contactDist);
+
+            if (touching && ghost.getState() == GhostState::FRIGHTENED && !ghost.getIsEaten())
             {
-                std::cout << "Ghost eaten! Showing eaten sprite." << std::endl;
+                // Escalating chain within one power pellet: 200 -> 400 -> 800 -> 1600.
+                static const int frightPoints[4] = {
+                    PointSystem::First_Frightened_Ghost_Points,
+                    PointSystem::Second_Frightened_Ghost_Points,
+                    PointSystem::Third_Frightened_Ghost_Points,
+                    PointSystem::Fourth_Frightened_Ghost_Points};
+                int idx = frightenedGhostsEaten < 4 ? frightenedGhostsEaten : 3;
+                points.addPoints(frightPoints[idx]);
+                frightenedGhostsEaten++;
                 ghost.setEaten();
-                points.addPoints(PointSystem::First_Frightened_Ghost_Points);
+            }
+            else if (touching && ghost.getState() == GhostState::NORMAL && !muncherDying)
+            {
+                // Caught by a live ghost: lose a life and start the death animation
+                // (the reset happens at the top of the loop when it finishes).
+                std::cout << "Muncher caught! Losing a life." << std::endl;
+                points.loseLife();
+                muncher.setState(MuncherState::DYING);
+                muncherDying = true;
+                deathClock.restart();
             }
         }
 
@@ -384,6 +490,7 @@ int main()
             std::cout << "Power pellet eaten! Ghosts are now frightened!" << std::endl;
             pelletGrid.setPowerPellet(gridX, gridY, false);
             ghostAI.setFrightened();
+            frightenedGhostsEaten = 0; // start a fresh 200/400/800/1600 chain
             points.addPoints(PointSystem::POINTS_PER_POWER_PELLET);
 
             // Set all ghosts to frightened state
@@ -394,9 +501,19 @@ int main()
         }
         else if (pelletGrid.hasPellet(gridX, gridY))
         {
-            std::cout << "Pellet eaten!" << std::endl;
             pelletGrid.setPellet(gridX, gridY, false);
             points.addPoints(PointSystem::POINTS_PER_PELLET);
+        }
+
+        // Level clear: every pellet eaten -> restart the board, keep score & lives.
+        if (pelletGrid.countPellets() == 0 && pelletGrid.countPowerPellets() == 0)
+        {
+            std::cout << "Level cleared! Restarting the board (score & lives kept)." << std::endl;
+            pelletGrid = PelletGrid(grid); // repopulate all pellets from the map
+            muncher.reset(grid.getPlayerStartX(), grid.getPlayerStartY());
+            for (auto &ghost : ghosts)
+                ghost.reset();
+            ghostAI = GhostAI(); // restart the scatter/chase cycle
         }
 
         // Clear window

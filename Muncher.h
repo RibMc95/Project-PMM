@@ -86,6 +86,20 @@ public:
     {
         return isMoving;
     }
+
+    // Reset to a starting tile (used on level restart / life loss).
+    void reset(int startX, int startY)
+    {
+        position = sf::Vector2i(startX, startY);
+        renderPosition = sf::Vector2f(startX * size, startY * size);
+        targetPosition = renderPosition;
+        direction = MuncherDirection::RIGHT;
+        isMoving = false;
+        currentFrame = 0;
+        state = MuncherState::IDLE;
+        sprite.setPosition(renderPosition.x + size / 2.0f, renderPosition.y + size / 2.0f);
+        applyFrame();
+    }
 };
 
 // Constructor implementation
@@ -120,9 +134,10 @@ inline void Muncher::applyFrame()
         break;
     case MuncherState::DYING:
     {
+        // Play the death frames once, then hold on the final frame (no looping).
         const MuncherFrame deaths[4] = {MuncherFrame::DEATH_1, MuncherFrame::DEATH_2,
                                         MuncherFrame::DEATH_3, MuncherFrame::DEATH_FINAL};
-        frame = deaths[currentFrame % 4];
+        frame = deaths[currentFrame < 4 ? currentFrame : 3];
         break;
     }
     }
@@ -292,36 +307,6 @@ inline void Muncher::startMovement(const Grid &grid, MuncherDirection dir)
     isMoving = true;
     setState(MuncherState::MOVING);
     movementClock.restart();
-}
-
-// Main move function that handles input and updates
-void move(Muncher &muncher, const Grid &grid)
-{
-    // Update animations and movement
-    muncher.updateAnimation();
-    muncher.updateMovement();
-
-    // Handle input for movement (you can modify this based on your input system)
-    if (!muncher.getIsMoving())
-    {
-        // Example: Check for keyboard input
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up))
-        {
-            muncher.startMovement(grid, MuncherDirection::UP);
-        }
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down))
-        {
-            muncher.startMovement(grid, MuncherDirection::DOWN);
-        }
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left))
-        {
-            muncher.startMovement(grid, MuncherDirection::LEFT);
-        }
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right))
-        {
-            muncher.startMovement(grid, MuncherDirection::RIGHT);
-        }
-    }
 }
 
 #endif

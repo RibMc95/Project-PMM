@@ -41,6 +41,7 @@ private:
 
     // Current AI state
     AIMode currentMode;
+    AIMode modeBeforeFrightened; // phase to resume when frightened ends
     sf::Clock modeTimer;
     sf::Clock frightenedTimer;
     bool modeJustChanged;
@@ -61,8 +62,6 @@ public:
     void updateMode();
     void setFrightened();
     AIMode getCurrentMode() const { return currentMode; }
-    void returnToCurrentMode();
-    AIMode getPreviousMode() const;
 
     // Individual ghost AI behaviors
     sf::Vector2i getTargetTile(const Ghost &ghost, const Muncher &muncher, const Grid &grid);
@@ -84,7 +83,7 @@ public:
 
 // Constructor - Initialize scatter corners and AI state
 inline GhostAI::GhostAI()
-    : currentMode(AIMode::SCATTER), modeJustChanged(false), chaserGhost(nullptr)
+    : currentMode(AIMode::SCATTER), modeBeforeFrightened(AIMode::SCATTER), modeJustChanged(false), chaserGhost(nullptr)
 {
     // Set scatter corners for 28x31 authentic Pac-Man grid
     // These should be the four corners of your maze
@@ -195,7 +194,7 @@ inline void GhostAI::updateMode()
     {
         if (frightenedTimer.getElapsedTime().asSeconds() >= FRIGHTENED_TIME)
         {
-            currentMode = AIMode::CHASE; // Return to chase after frightened
+            currentMode = modeBeforeFrightened; // resume the phase frightened interrupted
             modeTimer.restart();
         }
         return;
@@ -230,23 +229,11 @@ inline void GhostAI::updateMode()
 // Set frightened mode (called when power pellet is eaten)
 inline void GhostAI::setFrightened()
 {
+    if (currentMode != AIMode::FRIGHTENED)
+        modeBeforeFrightened = currentMode; // remember what phase to resume afterwards
     currentMode = AIMode::FRIGHTENED;
     frightenedTimer.restart();
     modeJustChanged = true;
-}
-
-inline AIMode GhostAI::getPreviousMode() const
-{
-    // This function can be expanded to track previous mode if needed
-    // For now, it simply returns CHASE as a default
-    return AIMode::CHASE;
-}
-
-// return to current mode after power pellet effect ends
-inline void GhostAI::returnToCurrentMode()
-{
-    currentMode = AIMode::CHASE; // or SCATTER based on previous state
-    modeTimer.restart();
 }
 
 // Get target tile for a ghost based on mode and personality

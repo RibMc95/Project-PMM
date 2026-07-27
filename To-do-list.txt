@@ -2,3 +2,4 @@ Things to do:
 1. when all pellets are eaten, restart the cycle but keep score and lives 
 2 when muncher touches any ghost when not under the effect of the power pellet, plays his dying animation, loses one life, and put every one to their starting spots.
 3. After complety developed, add the diffcuilty curve. 
+4. add a dev mode ( can change high score, life ammount, and be invincible, set diffcuilty  levels)

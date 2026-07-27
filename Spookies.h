@@ -100,10 +100,19 @@ public:
     bool getIsEaten() const { return isEaten; }
     void setEaten()
     {
-        std::cout << "DEBUG: Ghost::setEaten() called. Setting isEaten=true, state=RETURNING" << std::endl;
         isEaten = true;
         eatenTimer.restart();
         setState(GhostState::RETURNING);
+    }
+
+    // Reset to spawn tile in NORMAL state (used on level restart / life loss).
+    void reset()
+    {
+        isEaten = false;
+        state = GhostState::NORMAL;
+        direction = GhostDirection::RIGHT;
+        setPosition(spawnPosition.x, spawnPosition.y);
+        applyFrame();
     }
 };
 
@@ -236,7 +245,6 @@ inline void Ghost::updateMovement(const Grid &grid, const std::vector<Ghost> &gh
             // If eaten and reached a ghost spawn tile, reset to normal
             if (isEaten && (position == spawnPosition || grid.isGhostSpawn(position.x, position.y)))
             {
-                std::cout << "Ghost reached spawn at (" << position.x << "," << position.y << "). Resetting to NORMAL." << std::endl;
                 isEaten = false;
                 setState(GhostState::NORMAL);
             }
@@ -256,7 +264,6 @@ inline void Ghost::updateMovement(const Grid &grid, const std::vector<Ghost> &gh
         // If eaten and not moving, start moving toward spawn
         if (position != spawnPosition)
         {
-            std::cout << "Ghost moving from (" << position.x << "," << position.y << ") to spawn (" << spawnPosition.x << "," << spawnPosition.y << ")" << std::endl;
             GhostDirection bestDir = direction;
             bool foundMove = false;
 
