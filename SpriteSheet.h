@@ -138,10 +138,6 @@ public:
         ok = good && texture.loadFromImage(sheet);
         texture.setSmooth(false); // crisp pixels, no blurring
 
-        // Dump the assembled sheet under a distinct name so it never collides
-        // with a hand-added SpriteSheet.png on case-insensitive (Windows) filesystems.
-        sheet.saveToFile("ghost_sheet_generated.png");
-
         if (ok)
             std::cout << "SpriteSheet: assembled 23 frames into one texture." << std::endl;
         else
