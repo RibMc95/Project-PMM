@@ -4,5 +4,8 @@ Claude.md
 # Generated at runtime by SpriteSheet.h (assembled ghost sheet)
 ghost_sheet_generated.png
 
+# dist directory for compiled code
+dist/
+
 # Compiled game binary
 munch_maze
