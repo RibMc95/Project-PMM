@@ -184,6 +184,11 @@ int main()
     bool hasStarted = false;                               // muncher waits for the first key press
     int level = 1;                                         // current level; drives the difficulty ramp
     bool paused = false;                                   // pause menu toggle (P)
+    bool devMode = false;                                  // dev/cheat mode (unlock with password)
+    bool invincible = false;                               // dev: ignore ghost catches
+    bool devMenu = false;                                  // dev menu overlay open (from pause)
+    std::string cheatBuffer;                               // rolling buffer of recently typed chars
+    const std::string DEV_PASSWORD = "M00140585";          // secret to unlock dev mode
 
     // Load UI font
     sf::Font uiFont;
@@ -292,11 +297,65 @@ int main()
                      event.key.code == sf::Keyboard::P && !gameOver && !muncherDying)
             {
                 paused = !paused; // toggle pause on P (not during death / game over)
+                if (!paused)
+                    devMenu = false; // leaving pause also closes the dev menu
                 muncher.setPaused(paused);
                 for (auto &ghost : ghosts)
                     ghost.setPaused(paused);
                 ghostAI.setPaused(paused);
                 fruitTimer.setPaused(paused);
+            }
+            else if (event.type == sf::Event::KeyPressed &&
+                     event.key.code == sf::Keyboard::D && paused)
+            {
+                devMenu = !devMenu; // open/close the dev menu from the pause screen
+            }
+            else if (event.type == sf::Event::KeyPressed && devMode)
+            {
+                // Dev-mode hotkeys (unlocked by the secret password).
+                switch (event.key.code)
+                {
+                case sf::Keyboard::I: // toggle invincibility
+                    invincible = !invincible;
+                    break;
+                case sf::Keyboard::L: // +1 life
+                    points.addLife();
+                    break;
+                case sf::Keyboard::H: // +1000 high score
+                    highScore += 1000;
+                    break;
+                case sf::Keyboard::N: // level up (ramp difficulty to watch the curve)
+                    level++;
+                    applyDifficulty(level);
+                    break;
+                case sf::Keyboard::B: // level down
+                    if (level > 1)
+                        level--;
+                    applyDifficulty(level);
+                    break;
+                default:
+                    break;
+                }
+            }
+            else if (event.type == sf::Event::TextEntered)
+            {
+                // Type the secret password anywhere to unlock dev mode.
+                unsigned int u = event.text.unicode;
+                if (u >= 32 && u < 127)
+                {
+                    char c = static_cast<char>(u);
+                    if (c >= 'a' && c <= 'z')
+                        c -= 32; // uppercase, so 'm' and 'M' both work
+                    cheatBuffer += c;
+                    if (cheatBuffer.size() > DEV_PASSWORD.size())
+                        cheatBuffer.erase(0, cheatBuffer.size() - DEV_PASSWORD.size());
+                    if (!devMode && cheatBuffer == DEV_PASSWORD)
+                    {
+                        devMode = true;
+                        cheatBuffer.clear();
+                        std::cout << "DEV MODE unlocked." << std::endl;
+                    }
+                }
             }
         }
 
@@ -317,15 +376,34 @@ int main()
 
             if (fontLoaded)
             {
-                sf::Text pausedText;
-                pausedText.setFont(uiFont);
-                pausedText.setString("PAUSED\nPress P to resume");
-                pausedText.setCharacterSize(40);
-                pausedText.setFillColor(sf::Color::White);
-                sf::FloatRect pb = pausedText.getLocalBounds();
-                pausedText.setOrigin(pb.left + pb.width / 2.0f, pb.top + pb.height / 2.0f);
-                pausedText.setPosition(GameConfig::WINDOW_WIDTH / 2.0f, GameConfig::WINDOW_HEIGHT / 2.0f);
-                window.draw(pausedText);
+                sf::Text overlay;
+                overlay.setFont(uiFont);
+                if (devMenu)
+                {
+                    std::string devStr;
+                    if (devMode)
+                        devStr = "DEV MENU\n\nLevel " + std::to_string(level) +
+                                 "    Lives " + std::to_string(points.getLives()) +
+                                 "    High " + std::to_string(highScore) +
+                                 "\nInvincible: " + (invincible ? "ON" : "OFF") +
+                                 "\n\nI invincible    L +life    H +high\n" +
+                                 "N level up    B level down\n\nD back    P resume";
+                    else
+                        devStr = "DEV MENU  (LOCKED)\n\nType the password to unlock\n\nD back    P resume";
+                    overlay.setString(devStr);
+                    overlay.setCharacterSize(22);
+                    overlay.setFillColor(sf::Color(0, 255, 0));
+                }
+                else
+                {
+                    overlay.setString("PAUSED\nPress P to resume\nPress D for Dev Menu");
+                    overlay.setCharacterSize(40);
+                    overlay.setFillColor(sf::Color::White);
+                }
+                sf::FloatRect pb = overlay.getLocalBounds();
+                overlay.setOrigin(pb.left + pb.width / 2.0f, pb.top + pb.height / 2.0f);
+                overlay.setPosition(GameConfig::WINDOW_WIDTH / 2.0f, GameConfig::WINDOW_HEIGHT / 2.0f);
+                window.draw(overlay);
             }
 
             window.display();
@@ -534,7 +612,7 @@ int main()
                 frightenedGhostsEaten++;
                 ghost.setEaten();
             }
-            else if (touching && ghost.getState() == GhostState::NORMAL && !muncherDying)
+            else if (touching && ghost.getState() == GhostState::NORMAL && !muncherDying && !invincible)
             {
                 // Caught by a live ghost: lose a life and start the death animation
                 // (the reset happens at the top of the loop when it finishes).
@@ -648,6 +726,18 @@ int main()
         {
             std::cout << "AI Mode changed to: " << modeText << std::endl;
             lastMode = ghostAI.getCurrentMode();
+        }
+
+        // Dev-mode HUD.
+        if (fontLoaded && devMode)
+        {
+            sf::Text devText;
+            devText.setFont(uiFont);
+            devText.setCharacterSize(16);
+            devText.setFillColor(sf::Color(0, 255, 0));
+            devText.setString("DEV  L" + std::to_string(level) + (invincible ? "  INVINCIBLE" : ""));
+            devText.setPosition(4.0f, 2.0f);
+            window.draw(devText);
         }
 
         // Display

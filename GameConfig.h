@@ -64,6 +64,8 @@ public:
         }
     }
 
+    void addLife() { extraLives++; } // dev-mode: grant a life
+
     int getLives() const
     {
         return extraLives;

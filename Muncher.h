@@ -153,21 +153,29 @@ inline void Muncher::applyFrame()
     sprite.setTextureRect(SpriteSheet::frameRect(frame));
     sprite.setScale(GameConfig::CHARACTER_SCALE, GameConfig::CHARACTER_SCALE);
 
-    // Pac is radially symmetric, so ONE facing rotated four ways covers every direction.
-    switch (direction)
+    // The death animation always plays upright; only living Pac rotates to face.
+    if (state == MuncherState::DYING)
     {
-    case MuncherDirection::RIGHT:
         sprite.setRotation(0.0f);
-        break;
-    case MuncherDirection::DOWN:
-        sprite.setRotation(90.0f);
-        break;
-    case MuncherDirection::LEFT:
-        sprite.setRotation(180.0f);
-        break;
-    case MuncherDirection::UP:
-        sprite.setRotation(270.0f);
-        break;
+    }
+    else
+    {
+        // Pac is radially symmetric, so ONE facing rotated four ways covers every direction.
+        switch (direction)
+        {
+        case MuncherDirection::RIGHT:
+            sprite.setRotation(0.0f);
+            break;
+        case MuncherDirection::DOWN:
+            sprite.setRotation(90.0f);
+            break;
+        case MuncherDirection::LEFT:
+            sprite.setRotation(180.0f);
+            break;
+        case MuncherDirection::UP:
+            sprite.setRotation(270.0f);
+            break;
+        }
     }
 }
 

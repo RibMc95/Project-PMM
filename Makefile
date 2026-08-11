@@ -5,12 +5,13 @@ CXXFLAGS = -std=c++17 -Wall -Wextra
 LIBS = -lsfml-graphics -lsfml-window -lsfml-system
 TARGET = munch_maze
 SOURCES = main.cpp
+HEADERS = $(wildcard *.h)
 
 # Default target
 all: $(TARGET)
 
 # Build target
-$(TARGET): $(SOURCES)
+$(TARGET): $(SOURCES) $(HEADERS)
 	$(CXX) $(CXXFLAGS) $(SOURCES) $(LIBS) -o $(TARGET)
 
 # Clean target
