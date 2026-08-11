@@ -7,6 +7,7 @@
 #include "Grid.h"
 #include "GameConfig.h"
 #include "SpriteSheet.h"
+#include "PausableClock.h"
 
 enum class MuncherDirection // Direction enum for Muncher
 {
@@ -37,13 +38,13 @@ private:
     sf::Sprite sprite;
 
     // Animation timing
-    sf::Clock animationClock;
+    PausableClock animationClock;
     float animationSpeed; // Time between frames in seconds
     int currentFrame;
 
     // Movement animation
     sf::Vector2f targetPosition;
-    sf::Clock movementClock;
+    PausableClock movementClock;
     float movementSpeed; // Time to complete one grid movement
     bool isMoving;
 
@@ -85,6 +86,13 @@ public:
     bool getIsMoving() const
     {
         return isMoving;
+    }
+
+    // Freeze/unfreeze this entity's timers for the pause menu.
+    void setPaused(bool p)
+    {
+        animationClock.setPaused(p);
+        movementClock.setPaused(p);
     }
 
     // Reset to a starting tile (used on level restart / life loss).

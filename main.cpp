@@ -10,6 +10,7 @@
 #include "Spookies.h"
 #include "Spookie_Chase.h"
 #include "GameConfig.h"
+#include "PausableClock.h"
 
 // Function to draw the maze walls and pellets with clear visual mapping
 void drawGame(sf::RenderWindow &window, const Grid &grid, const PelletGrid &pelletGrid, const SpriteSheet &sheet)
@@ -158,6 +159,19 @@ int main()
     // Initialize Ghost AI Controller
     GhostAI ghostAI;
 
+    // Apply per-level difficulty (ghost speed + AI mode durations). Re-called after
+    // every level-up / death / restart, since ghostAI is rebuilt in those spots.
+    auto applyDifficulty = [&](int lvl)
+    {
+        ghostAI.setLevel(lvl);
+        float ghostSpeed = 0.4f - (lvl - 1) * 0.025f; // seconds per tile; lower = faster
+        if (ghostSpeed < 0.2f)
+            ghostSpeed = 0.2f;
+        for (auto &ghost : ghosts)
+            ghost.setMovementSpeed(ghostSpeed);
+    };
+    applyDifficulty(1);
+
     // Points and lives
     PointSystem points;
     int highScore = 0;
@@ -168,6 +182,8 @@ int main()
     bool gameOver = false;                                 // true once lives hit 0
     MuncherDirection desiredDir = MuncherDirection::RIGHT; // buffered input direction
     bool hasStarted = false;                               // muncher waits for the first key press
+    int level = 1;                                         // current level; drives the difficulty ramp
+    bool paused = false;                                   // pause menu toggle (P)
 
     // Load UI font
     sf::Font uiFont;
@@ -246,7 +262,7 @@ int main()
     std::cout << "  * WILL (Yellow) - Bashful: Retreats when close" << std::endl;
 
     // Add these before the game loop
-    sf::Clock fruitTimer;
+    PausableClock fruitTimer;
     bool fruitPresent = false;      // fruit initially not present
     bool waitingForRespawn = false; // waiting state after fruit is eaten
 
@@ -272,6 +288,48 @@ int main()
             {
                 window.close();
             }
+            else if (event.type == sf::Event::KeyPressed &&
+                     event.key.code == sf::Keyboard::P && !gameOver && !muncherDying)
+            {
+                paused = !paused; // toggle pause on P (not during death / game over)
+                muncher.setPaused(paused);
+                for (auto &ghost : ghosts)
+                    ghost.setPaused(paused);
+                ghostAI.setPaused(paused);
+                fruitTimer.setPaused(paused);
+            }
+        }
+
+        // Pause menu: freeze the scene under a dimmed overlay until P is pressed again.
+        if (paused)
+        {
+            window.clear(sf::Color::Black);
+            drawGame(window, grid, pelletGrid, spriteSheet);
+            window.draw(muncher.getSprite());
+            for (auto &ghost : ghosts)
+                window.draw(ghost.getSprite());
+            if (fruitPresent && !fruitPellet.isCollected())
+                fruitPellet.draw(window);
+
+            sf::RectangleShape dim(sf::Vector2f(GameConfig::WINDOW_WIDTH, GameConfig::WINDOW_HEIGHT));
+            dim.setFillColor(sf::Color(0, 0, 0, 160)); // translucent black
+            window.draw(dim);
+
+            if (fontLoaded)
+            {
+                sf::Text pausedText;
+                pausedText.setFont(uiFont);
+                pausedText.setString("PAUSED\nPress P to resume");
+                pausedText.setCharacterSize(40);
+                pausedText.setFillColor(sf::Color::White);
+                sf::FloatRect pb = pausedText.getLocalBounds();
+                pausedText.setOrigin(pb.left + pb.width / 2.0f, pb.top + pb.height / 2.0f);
+                pausedText.setPosition(GameConfig::WINDOW_WIDTH / 2.0f, GameConfig::WINDOW_HEIGHT / 2.0f);
+                window.draw(pausedText);
+            }
+
+            window.display();
+            continue;
         }
 
         // Game over: out of lives. Freeze on a GAME OVER screen; Space restarts
@@ -281,11 +339,13 @@ int main()
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
             {
                 points = PointSystem();
+                level = 1;
                 pelletGrid = PelletGrid(grid);
                 muncher.reset(grid.getPlayerStartX(), grid.getPlayerStartY());
                 for (auto &ghost : ghosts)
                     ghost.reset();
                 ghostAI = GhostAI();
+                applyDifficulty(level); // back to level-1 difficulty
                 frightenedGhostsEaten = 0;
                 gameOver = false;
                 hasStarted = false; // fresh game waits for the first key press
@@ -328,6 +388,7 @@ int main()
                     for (auto &ghost : ghosts)
                         ghost.reset();
                     ghostAI = GhostAI();
+                    applyDifficulty(level); // ghostAI was rebuilt -> restore this level's difficulty
                 }
             }
 
@@ -508,12 +569,14 @@ int main()
         // Level clear: every pellet eaten -> restart the board, keep score & lives.
         if (pelletGrid.countPellets() == 0 && pelletGrid.countPowerPellets() == 0)
         {
-            std::cout << "Level cleared! Restarting the board (score & lives kept)." << std::endl;
+            level++;
+            std::cout << "Level cleared! Advancing to level " << level << " (score & lives kept)." << std::endl;
             pelletGrid = PelletGrid(grid); // repopulate all pellets from the map
             muncher.reset(grid.getPlayerStartX(), grid.getPlayerStartY());
             for (auto &ghost : ghosts)
                 ghost.reset();
-            ghostAI = GhostAI(); // restart the scatter/chase cycle
+            ghostAI = GhostAI();    // restart the scatter/chase cycle
+            applyDifficulty(level); // ramp speed + timings for the new level
         }
 
         // Clear window

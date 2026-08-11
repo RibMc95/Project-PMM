@@ -10,6 +10,7 @@
 #include "Grid.h"
 #include "GameConfig.h"
 #include "SpriteSheet.h"
+#include "PausableClock.h"
 
 enum class GhostType
 {
@@ -51,19 +52,19 @@ private:
     sf::Sprite sprite;
 
     // Animation timing
-    sf::Clock animationClock;
+    PausableClock animationClock;
     float animationSpeed;
     int currentFrame;
 
     // Movement
     sf::Vector2f targetPosition;
-    sf::Clock movementClock;
+    PausableClock movementClock;
     float movementSpeed;
     bool isMoving;
 
     // Eaten state
     bool isEaten;
-    sf::Clock eatenTimer;
+    PausableClock eatenTimer;
     static constexpr float EATEN_DISPLAY_TIME = 8.0f; // Show eaten sprite for 8 seconds
 
 public:
@@ -98,6 +99,13 @@ public:
     sf::Sprite &getSprite() { return sprite; }
     bool getIsMoving() const { return isMoving; }
     bool getIsEaten() const { return isEaten; }
+    void setMovementSpeed(float s) { movementSpeed = s; } // seconds per tile; lower = faster
+    void setPaused(bool p)                                // freeze/unfreeze timers for the pause menu
+    {
+        animationClock.setPaused(p);
+        movementClock.setPaused(p);
+        eatenTimer.setPaused(p);
+    }
     void setEaten()
     {
         isEaten = true;

@@ -4,6 +4,7 @@
 #include "Spookies.h"
 #include "Grid.h"
 #include "Muncher.h"
+#include "PausableClock.h"
 #include <cmath>
 #include <vector>
 #include <algorithm>
@@ -30,10 +31,10 @@ enum class GhostPersonality
 class GhostAI
 {
 private:
-    // Mode timing (in seconds)
-    static constexpr float SCATTER_TIME = 7.0f;
-    static constexpr float CHASE_TIME = 20.0f;
-    static constexpr float FRIGHTENED_TIME = 10.0f;
+    // Per-level mode durations in seconds (recomputed by setLevel; base = level 1).
+    float scatterTime = 7.0f;
+    float chaseTime = 20.0f;
+    float frightenedTime = 10.0f;
 
     // Targeting parameters
     static constexpr int AMBUSH_DISTANCE = 4;               // Tiles ahead for ambusher
@@ -42,8 +43,8 @@ private:
     // Current AI state
     AIMode currentMode;
     AIMode modeBeforeFrightened; // phase to resume when frightened ends
-    sf::Clock modeTimer;
-    sf::Clock frightenedTimer;
+    PausableClock modeTimer;
+    PausableClock frightenedTimer;
     bool modeJustChanged;
 
     // Corner positions for scatter mode (each ghost has a specific corner)
@@ -61,7 +62,13 @@ public:
     // Mode management
     void updateMode();
     void setFrightened();
+    void setLevel(int level); // ramp mode durations for difficulty
     AIMode getCurrentMode() const { return currentMode; }
+    void setPaused(bool p) // freeze/unfreeze AI timers for the pause menu
+    {
+        modeTimer.setPaused(p);
+        frightenedTimer.setPaused(p);
+    }
 
     // Individual ghost AI behaviors
     sf::Vector2i getTargetTile(const Ghost &ghost, const Muncher &muncher, const Grid &grid);
@@ -192,7 +199,7 @@ inline void GhostAI::updateMode()
     // Handle frightened mode (overrides normal cycle)
     if (currentMode == AIMode::FRIGHTENED)
     {
-        if (frightenedTimer.getElapsedTime().asSeconds() >= FRIGHTENED_TIME)
+        if (frightenedTimer.getElapsedTime().asSeconds() >= frightenedTime)
         {
             currentMode = modeBeforeFrightened; // resume the phase frightened interrupted
             modeTimer.restart();
@@ -204,7 +211,7 @@ inline void GhostAI::updateMode()
     switch (currentMode)
     {
     case AIMode::SCATTER:
-        if (elapsed >= SCATTER_TIME)
+        if (elapsed >= scatterTime)
         {
             currentMode = AIMode::CHASE;
             modeTimer.restart();
@@ -212,7 +219,7 @@ inline void GhostAI::updateMode()
         break;
 
     case AIMode::CHASE:
-        if (elapsed >= CHASE_TIME)
+        if (elapsed >= chaseTime)
         {
             currentMode = AIMode::SCATTER;
             modeTimer.restart();
@@ -234,6 +241,25 @@ inline void GhostAI::setFrightened()
     currentMode = AIMode::FRIGHTENED;
     frightenedTimer.restart();
     modeJustChanged = true;
+}
+
+// Ramp mode durations with level: shorter scatter, longer chase, weaker power
+// pellets (shorter frightened). Level 1 = base values.
+inline void GhostAI::setLevel(int level)
+{
+    int n = (level > 1) ? (level - 1) : 0; // steps above level 1
+
+    scatterTime = 7.0f - n * 0.5f;
+    if (scatterTime < 3.0f)
+        scatterTime = 3.0f;
+
+    chaseTime = 20.0f + n * 2.0f;
+    if (chaseTime > 40.0f)
+        chaseTime = 40.0f;
+
+    frightenedTime = 10.0f - n * 1.0f;
+    if (frightenedTime < 1.0f)
+        frightenedTime = 1.0f;
 }
 
 // Get target tile for a ghost based on mode and personality
